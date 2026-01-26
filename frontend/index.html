@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expense Tracker</title>
+    <title>Expense Tracker - Track Your Spending</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -74,31 +77,43 @@
                     </form>
                 </section>
 
-                <!-- Add Category Form -->
-                <section class="card">
-                    <h2>🏷️ Add Category</h2>
-                    <form id="categoryForm">
-                        <div class="form-group">
-                            <label for="categoryName">Category Name</label>
-                            <input type="text" id="categoryName" placeholder="e.g., Groceries" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="categoryIcon">Icon (emoji)</label>
-                            <input type="text" id="categoryIcon" placeholder="🛒" maxlength="2">
-                        </div>
-                        <div class="form-group">
-                            <label for="categoryColor">Color</label>
-                            <input type="color" id="categoryColor" value="#36A2EB">
-                        </div>
-                        <button type="submit" class="btn btn-secondary">Add Category</button>
-                    </form>
-                </section>
+                <!-- Collapsible Category Management -->
+                <div class="collapsible-section">
+                    <button class="collapsible-toggle" onclick="toggleCategorySection()">
+                        <span>⚙️ Manage Categories</span>
+                        <span class="toggle-icon">▼</span>
+                    </button>
 
-                <!-- Categories List -->
-                <section class="card">
-                    <h2>📂 Categories</h2>
-                    <div id="categoriesList" class="categories-list"></div>
-                </section>
+                    <div class="collapsible-content" id="categorySection">
+                        <!-- Add Category Form -->
+                        <div class="collapsible-card">
+                            <h3>🏷️ Add New Category</h3>
+                            <form id="categoryForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="categoryName">Name</label>
+                                        <input type="text" id="categoryName" placeholder="e.g., Groceries" required>
+                                    </div>
+                                    <div class="form-group form-group-small">
+                                        <label for="categoryIcon">Icon</label>
+                                        <input type="text" id="categoryIcon" placeholder="🛒" maxlength="2">
+                                    </div>
+                                    <div class="form-group form-group-small">
+                                        <label for="categoryColor">Color</label>
+                                        <input type="color" id="categoryColor" value="#0D9488">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-secondary btn-compact">+ Add Category</button>
+                            </form>
+                        </div>
+
+                        <!-- Categories List -->
+                        <div class="collapsible-card">
+                            <h3>📂 Your Categories</h3>
+                            <div id="categoriesList" class="categories-list"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Right Panel - Charts & Data -->
@@ -129,7 +144,7 @@
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h2>📝 Recent Expenses</h2>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <select id="sortBy" class="sort-select">
                                 <option value="date">Sort by Date</option>
                                 <option value="amount">Sort by Amount</option>
@@ -139,11 +154,40 @@
                                 <option value="desc">Descending</option>
                                 <option value="asc">Ascending</option>
                             </select>
+                            <button class="btn btn-small btn-outline" onclick="openAllTransactionsModal()">View
+                                All</button>
                         </div>
                     </div>
                     <div id="expensesList" class="expenses-list"></div>
                 </section>
             </div>
+        </div>
+    </div>
+
+    <!-- All Transactions Modal -->
+    <div id="allTransactionsModal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="close" onclick="closeAllTransactionsModal()">&times;</span>
+            <h2>📋 All Transactions</h2>
+            <div class="modal-controls">
+                <div class="search-box">
+                    <input type="text" id="searchTransactions" placeholder="Search transactions..."
+                        oninput="filterTransactions()">
+                </div>
+                <div class="filter-controls">
+                    <select id="filterCategory" class="sort-select" onchange="filterTransactions()">
+                        <option value="">All Categories</option>
+                    </select>
+                    <select id="filterMonth" class="sort-select" onchange="filterTransactions()">
+                        <option value="">All Time</option>
+                    </select>
+                </div>
+            </div>
+            <div class="transactions-summary">
+                <span id="transactionCount">0 transactions</span>
+                <span id="transactionTotal">Total: ₹0.00</span>
+            </div>
+            <div id="allExpensesList" class="expenses-list expenses-list-full"></div>
         </div>
     </div>
 

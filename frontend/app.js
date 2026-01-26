@@ -9,6 +9,108 @@ let trendChart = null;
 let dateCalendar = null;
 let editDateCalendar = null;
 
+// Toggle Category Section
+function toggleCategorySection() {
+    const toggle = document.querySelector('.collapsible-toggle');
+    const content = document.getElementById('categorySection');
+    toggle.classList.toggle('active');
+    content.classList.toggle('show');
+}
+
+// All Transactions Modal
+function openAllTransactionsModal() {
+    const modal = document.getElementById('allTransactionsModal');
+    modal.style.display = 'block';
+    populateFilterOptions();
+    renderAllExpenses();
+}
+
+function closeAllTransactionsModal() {
+    document.getElementById('allTransactionsModal').style.display = 'none';
+}
+
+function populateFilterOptions() {
+    // Populate category filter
+    const categoryFilter = document.getElementById('filterCategory');
+    categoryFilter.innerHTML = '<option value="">All Categories</option>' +
+        categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+
+    // Populate month filter
+    const monthFilter = document.getElementById('filterMonth');
+    const months = [...new Set(expenses.map(e => {
+        const d = new Date(e.date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }))].sort().reverse();
+
+    monthFilter.innerHTML = '<option value="">All Time</option>' +
+        months.map(m => {
+            const [year, month] = m.split('-');
+            const date = new Date(year, month - 1);
+            const label = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            return `<option value="${m}">${label}</option>`;
+        }).join('');
+}
+
+function filterTransactions() {
+    renderAllExpenses();
+}
+
+function renderAllExpenses() {
+    const container = document.getElementById('allExpensesList');
+    const searchTerm = document.getElementById('searchTransactions').value.toLowerCase();
+    const categoryFilter = document.getElementById('filterCategory').value;
+    const monthFilter = document.getElementById('filterMonth').value;
+
+    let filtered = expenses.filter(expense => {
+        const category = categories.find(c => c.id === expense.categoryId);
+        const matchesSearch = !searchTerm ||
+            expense.description?.toLowerCase().includes(searchTerm) ||
+            category?.name.toLowerCase().includes(searchTerm);
+
+        const matchesCategory = !categoryFilter || expense.categoryId === categoryFilter;
+
+        const expenseMonth = new Date(expense.date);
+        const expenseMonthStr = `${expenseMonth.getFullYear()}-${String(expenseMonth.getMonth() + 1).padStart(2, '0')}`;
+        const matchesMonth = !monthFilter || expenseMonthStr === monthFilter;
+
+        return matchesSearch && matchesCategory && matchesMonth;
+    });
+
+    // Update summary
+    document.getElementById('transactionCount').textContent = `${filtered.length} transaction${filtered.length !== 1 ? 's' : ''}`;
+    document.getElementById('transactionTotal').textContent = `Total: ₹${filtered.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}`;
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>No transactions found</p></div>';
+        return;
+    }
+
+    container.innerHTML = filtered.map(expense => {
+        const category = categories.find(c => c.id === expense.categoryId) || { icon: '📦', name: 'Unknown', color: '#888' };
+        const date = new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+        return `
+            <div class="expense-item">
+                <div class="expense-info">
+                    <span class="expense-icon">${category.icon}</span>
+                    <div class="expense-details">
+                        <h4>${expense.description || 'No description'}</h4>
+                        <span style="color: ${category.color}">${category.name}</span>
+                    </div>
+                </div>
+                <div class="expense-amount">
+                    <div class="amount">-₹${expense.amount.toFixed(2)}</div>
+                    <div class="date">${date}</div>
+                </div>
+                <div class="expense-actions">
+                    <button class="btn btn-small btn-primary" onclick="editExpense('${expense.id}'); closeAllTransactionsModal();">Edit</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteExpense('${expense.id}'); renderAllExpenses();">Delete</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initializeDateInput();
@@ -67,6 +169,9 @@ function setupEventListeners() {
     window.addEventListener('click', (e) => {
         if (e.target === document.getElementById('editModal')) {
             closeModal();
+        }
+        if (e.target === document.getElementById('allTransactionsModal')) {
+            closeAllTransactionsModal();
         }
     });
 }
