@@ -4,11 +4,11 @@ import { CreateExpenseDto } from './expense.interface';
 
 @Controller('api/expenses')
 export class ExpensesController {
-  constructor(private readonly expensesService: ExpensesService) {}
+  constructor(private readonly expensesService: ExpensesService) { }
 
   @Get()
-  findAll() {
-    return this.expensesService.findAll();
+  findAll(@Query('sortBy') sortBy?: string, @Query('sortOrder') sortOrder?: string) {
+    return this.expensesService.findAll(sortBy, sortOrder);
   }
 
   @Get('summary')

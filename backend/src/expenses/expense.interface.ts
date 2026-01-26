@@ -1,6 +1,6 @@
 export interface Expense {
   id: string;
-  description: string;
+  description?: string;
   amount: number;
   categoryId: string;
   date: Date;
@@ -8,7 +8,7 @@ export interface Expense {
 }
 
 export interface CreateExpenseDto {
-  description: string;
+  description?: string;
   amount: number;
   categoryId: string;
   date?: string;

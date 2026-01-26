@@ -6,6 +6,8 @@ let categories = [];
 let expenses = [];
 let categoryChart = null;
 let trendChart = null;
+let dateCalendar = null;
+let editDateCalendar = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,8 +22,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Set default date to today
 function initializeDateInput() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('date').value = today;
+    const today = new Date();
+
+    // Initialize main date calendar (inline)
+    dateCalendar = flatpickr('#date', {
+        inline: true,
+        appendTo: document.getElementById('dateCalendar'),
+        defaultDate: today,
+        dateFormat: 'Y-m-d',
+        onChange: function (selectedDates, dateStr) {
+            document.getElementById('date').value = dateStr;
+        }
+    });
+
+    document.getElementById('date').value = today.toISOString().split('T')[0];
 }
 
 // Event Listeners
@@ -43,6 +57,10 @@ function setupEventListeners() {
         e.preventDefault();
         await updateExpense();
     });
+
+    // Sort controls
+    document.getElementById('sortBy').addEventListener('change', loadExpenses);
+    document.getElementById('sortOrder').addEventListener('change', loadExpenses);
 
     // Modal close
     document.querySelector('.close').addEventListener('click', closeModal);
@@ -73,7 +91,8 @@ async function fetchAPI(endpoint, options = {}) {
 async function loadCategories() {
     categories = await fetchAPI('/categories') || [];
     renderCategories();
-    populateCategorySelects();
+    renderCategoryOptions('categoryOptions');
+    renderCategoryOptions('editCategoryOptions');
 }
 
 async function addCategory() {
@@ -89,7 +108,8 @@ async function addCategory() {
     if (category) {
         categories.push(category);
         renderCategories();
-        populateCategorySelects();
+        renderCategoryOptions('categoryOptions');
+        renderCategoryOptions('editCategoryOptions');
         document.getElementById('categoryForm').reset();
         document.getElementById('categoryColor').value = '#36A2EB';
     }
@@ -101,7 +121,8 @@ async function deleteCategory(id) {
     await fetchAPI(`/categories/${id}`, { method: 'DELETE' });
     categories = categories.filter(c => c.id !== id);
     renderCategories();
-    populateCategorySelects();
+    renderCategoryOptions('categoryOptions');
+    renderCategoryOptions('editCategoryOptions');
 }
 
 function renderCategories() {
@@ -120,23 +141,45 @@ function renderCategories() {
     `).join('');
 }
 
-function populateCategorySelects() {
-    const selects = [
-        document.getElementById('category'),
-        document.getElementById('editCategory')
-    ];
+function renderCategoryOptions(containerId, selectedId = '') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
-    selects.forEach(select => {
-        const currentValue = select.value;
-        select.innerHTML = '<option value="">Select category...</option>' +
-            categories.map(cat => `<option value="${cat.id}">${cat.icon} ${cat.name}</option>`).join('');
-        if (currentValue) select.value = currentValue;
+    if (categories.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem;">Add categories first</p>';
+        return;
+    }
+
+    container.innerHTML = categories.map(cat => `
+        <button type="button" 
+                class="category-option ${selectedId === cat.id ? 'selected' : ''}" 
+                data-category-id="${cat.id}"
+                style="--category-color: ${cat.color}"
+                onclick="selectCategory('${containerId}', '${cat.id}')">
+            <span class="emoji">${cat.icon}</span>
+            <span class="name">${cat.name}</span>
+        </button>
+    `).join('');
+}
+
+function selectCategory(containerId, categoryId) {
+    // Update hidden input
+    const inputId = containerId === 'categoryOptions' ? 'category' : 'editCategory';
+    document.getElementById(inputId).value = categoryId;
+
+    // Update UI
+    const container = document.getElementById(containerId);
+    container.querySelectorAll('.category-option').forEach(btn => {
+        btn.classList.remove('selected');
     });
+    container.querySelector(`[data-category-id="${categoryId}"]`)?.classList.add('selected');
 }
 
 // Expenses
 async function loadExpenses() {
-    expenses = await fetchAPI('/expenses') || [];
+    const sortBy = document.getElementById('sortBy')?.value || 'date';
+    const sortOrder = document.getElementById('sortOrder')?.value || 'desc';
+    expenses = await fetchAPI(`/expenses?sortBy=${sortBy}&sortOrder=${sortOrder}`) || [];
     renderExpenses();
 }
 
@@ -158,6 +201,7 @@ async function addExpense() {
         loadPatterns();
         loadTrends();
         document.getElementById('expenseForm').reset();
+        renderCategoryOptions('categoryOptions'); // Reset category selection
         initializeDateInput();
     }
 }
@@ -178,10 +222,30 @@ function editExpense(id) {
     if (!expense) return;
 
     document.getElementById('editExpenseId').value = expense.id;
-    document.getElementById('editDescription').value = expense.description;
+    document.getElementById('editDescription').value = expense.description || '';
     document.getElementById('editAmount').value = expense.amount;
     document.getElementById('editCategory').value = expense.categoryId;
-    document.getElementById('editDate').value = new Date(expense.date).toISOString().split('T')[0];
+
+    // Render category options with selection
+    renderCategoryOptions('editCategoryOptions', expense.categoryId);
+
+    const expenseDate = new Date(expense.date).toISOString().split('T')[0];
+    document.getElementById('editDate').value = expenseDate;
+
+    // Initialize or update edit date calendar
+    if (editDateCalendar) {
+        editDateCalendar.setDate(expenseDate);
+    } else {
+        editDateCalendar = flatpickr('#editDate', {
+            inline: true,
+            appendTo: document.getElementById('editDateCalendar'),
+            defaultDate: expenseDate,
+            dateFormat: 'Y-m-d',
+            onChange: function (selectedDates, dateStr) {
+                document.getElementById('editDate').value = dateStr;
+            }
+        });
+    }
 
     document.getElementById('editModal').style.display = 'block';
 }
@@ -235,7 +299,7 @@ function renderExpenses() {
                     </div>
                 </div>
                 <div class="expense-amount">
-                    <div class="amount">-$${expense.amount.toFixed(2)}</div>
+                    <div class="amount">-₹${expense.amount.toFixed(2)}</div>
                     <div class="date">${date}</div>
                 </div>
                 <div class="expense-actions">
@@ -252,8 +316,8 @@ async function loadSummary() {
     const summary = await fetchAPI('/expenses/summary');
     if (!summary) return;
 
-    document.getElementById('thisMonthTotal').textContent = `$${summary.thisMonth.toFixed(2)}`;
-    document.getElementById('totalExpenses').textContent = `$${summary.totalExpenses.toFixed(2)}`;
+    document.getElementById('thisMonthTotal').textContent = `₹${summary.thisMonth.toFixed(2)}`;
+    document.getElementById('totalExpenses').textContent = `₹${summary.totalExpenses.toFixed(2)}`;
     document.getElementById('totalTransactions').textContent = summary.totalTransactions;
 
     const changeEl = document.getElementById('monthlyChange');
@@ -291,7 +355,7 @@ function renderPatterns(patterns) {
                 <div class="pattern-bar-container">
                     <div class="pattern-info">
                         <span class="pattern-name">${pattern.categoryName}</span>
-                        <span class="pattern-amount">$${pattern.totalAmount.toFixed(2)} (${pattern.count} transactions)</span>
+                        <span class="pattern-amount">₹${pattern.totalAmount.toFixed(2)} (${pattern.count} transactions)</span>
                     </div>
                     <div class="pattern-bar">
                         <div class="pattern-bar-fill" style="width: ${pattern.percentage}%; background-color: ${category.color}"></div>
@@ -299,7 +363,7 @@ function renderPatterns(patterns) {
                 </div>
                 <div class="pattern-stats">
                     <div class="pattern-percentage">${pattern.percentage.toFixed(1)}%</div>
-                    <div class="pattern-count">avg $${pattern.averageAmount.toFixed(2)}</div>
+                    <div class="pattern-count">avg ₹${pattern.averageAmount.toFixed(2)}</div>
                 </div>
             </div>
         `;
@@ -350,7 +414,7 @@ function renderCategoryChart(patterns) {
                             const value = context.raw;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = ((value / total) * 100).toFixed(1);
-                            return `$${value.toFixed(2)} (${percentage}%)`;
+                            return `₹${value.toFixed(2)} (${percentage}%)`;
                         }
                     }
                 }
@@ -399,7 +463,7 @@ function renderTrendChart(trends) {
                 tooltip: {
                     callbacks: {
                         label: function (context) {
-                            return `$${context.raw.toFixed(2)}`;
+                            return `₹${context.raw.toFixed(2)}`;
                         }
                     }
                 }
@@ -409,7 +473,7 @@ function renderTrendChart(trends) {
                     beginAtZero: true,
                     ticks: {
                         callback: function (value) {
-                            return '$' + value;
+                            return '₹' + value;
                         }
                     }
                 }

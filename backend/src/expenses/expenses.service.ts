@@ -36,8 +36,28 @@ export class ExpensesService {
     fs.writeFileSync(this.dataPath, JSON.stringify(this.expenses, null, 2));
   }
 
-  findAll(): Expense[] {
-    return this.expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  findAll(sortBy?: string, sortOrder?: string): Expense[] {
+    const sorted = [...this.expenses];
+    const order = sortOrder === 'asc' ? 1 : -1;
+
+    switch (sortBy) {
+      case 'amount':
+        sorted.sort((a, b) => (a.amount - b.amount) * order);
+        break;
+      case 'category':
+        sorted.sort((a, b) => {
+          const catA = this.categoriesService.findOne(a.categoryId)?.name || '';
+          const catB = this.categoriesService.findOne(b.categoryId)?.name || '';
+          return catA.localeCompare(catB) * order;
+        });
+        break;
+      case 'date':
+      default:
+        sorted.sort((a, b) => (new Date(a.date).getTime() - new Date(b.date).getTime()) * order);
+        break;
+    }
+
+    return sorted;
   }
 
   findOne(id: string): Expense | undefined {
