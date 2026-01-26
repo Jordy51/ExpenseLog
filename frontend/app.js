@@ -17,6 +17,15 @@ function toggleCategorySection() {
     content.classList.toggle('show');
 }
 
+// Toggle Insights Section
+function toggleInsightsSection() {
+    const toggles = document.querySelectorAll('.collapsible-toggle');
+    const toggle = toggles[1]; // Second collapsible toggle (Insights)
+    const content = document.getElementById('insightsSection');
+    toggle.classList.toggle('active');
+    content.classList.toggle('show');
+}
+
 // All Transactions Modal
 function openAllTransactionsModal() {
     const modal = document.getElementById('allTransactionsModal');
@@ -115,7 +124,7 @@ function renderAllExpenses() {
 document.addEventListener('DOMContentLoaded', () => {
     initializeDateInput();
     loadCategories();
-    loadExpenses();
+    loadExpenses(); // loadInsights is called inside after data is fetched
     loadSummary();
     loadPatterns();
     loadTrends();
@@ -172,6 +181,9 @@ function setupEventListeners() {
         }
         if (e.target === document.getElementById('allTransactionsModal')) {
             closeAllTransactionsModal();
+        }
+        if (e.target === document.getElementById('budgetModal')) {
+            closeBudgetModal();
         }
     });
 }
@@ -286,6 +298,7 @@ async function loadExpenses() {
     const sortOrder = document.getElementById('sortOrder')?.value || 'desc';
     expenses = await fetchAPI(`/expenses?sortBy=${sortBy}&sortOrder=${sortOrder}`) || [];
     renderExpenses();
+    loadInsights(); // Load insights after expenses are fetched
 }
 
 async function addExpense() {
@@ -305,6 +318,7 @@ async function addExpense() {
         loadSummary();
         loadPatterns();
         loadTrends();
+        loadInsights();
         document.getElementById('expenseForm').reset();
         renderCategoryOptions('categoryOptions'); // Reset category selection
         initializeDateInput();
@@ -320,6 +334,7 @@ async function deleteExpense(id) {
     loadSummary();
     loadPatterns();
     loadTrends();
+    loadInsights();
 }
 
 function editExpense(id) {
@@ -374,6 +389,7 @@ async function updateExpense() {
         loadSummary();
         loadPatterns();
         loadTrends();
+        loadInsights();
         closeModal();
     }
 }
@@ -585,4 +601,424 @@ function renderTrendChart(trends) {
             }
         }
     });
+}
+
+// =============================================
+// INSIGHTS FUNCTIONS
+// =============================================
+
+// Budget state (stored in localStorage)
+let budgets = JSON.parse(localStorage.getItem('budgets') || '{}');
+
+function loadInsights() {
+    calculateAverages();
+    calculatePeakDay();
+    generateAlerts();
+    renderBudgetTracking();
+    renderTopExpenses();
+    renderCategoryComparison();
+    calculateStreaks();
+}
+
+function calculateAverages() {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Get this month's expenses
+    const thisMonthExpenses = expenses.filter(e => {
+        const d = new Date(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+
+    const totalThisMonth = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const dayOfMonth = now.getDate();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+    // Daily average (this month)
+    const dailyAvg = dayOfMonth > 0 ? totalThisMonth / dayOfMonth : 0;
+    document.getElementById('dailyAverage').textContent = `₹${dailyAvg.toFixed(2)}`;
+
+    // Weekly average
+    const weeklyAvg = dailyAvg * 7;
+    document.getElementById('weeklyAverage').textContent = `₹${weeklyAvg.toFixed(2)}`;
+
+    // Predicted monthly total
+    const predictedTotal = dayOfMonth > 0 ? (totalThisMonth / dayOfMonth) * daysInMonth : 0;
+    document.getElementById('predictedMonthly').textContent = `₹${predictedTotal.toFixed(2)}`;
+}
+
+function calculatePeakDay() {
+    if (expenses.length === 0) {
+        document.getElementById('peakDay').textContent = '-';
+        return;
+    }
+
+    const dayTotals = {};
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    expenses.forEach(e => {
+        const day = new Date(e.date).getDay();
+        dayTotals[day] = (dayTotals[day] || 0) + e.amount;
+    });
+
+    let maxDay = 0;
+    let maxAmount = 0;
+    for (const [day, amount] of Object.entries(dayTotals)) {
+        if (amount > maxAmount) {
+            maxAmount = amount;
+            maxDay = parseInt(day);
+        }
+    }
+
+    document.getElementById('peakDay').textContent = days[maxDay];
+}
+
+function generateAlerts() {
+    const container = document.getElementById('spendingAlerts');
+    const alerts = [];
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    // Get spending by category for this month and last month
+    const thisMonthByCategory = {};
+    const lastMonthByCategory = {};
+
+    expenses.forEach(e => {
+        const d = new Date(e.date);
+        const month = d.getMonth();
+        const year = d.getFullYear();
+
+        if (month === currentMonth && year === currentYear) {
+            thisMonthByCategory[e.categoryId] = (thisMonthByCategory[e.categoryId] || 0) + e.amount;
+        } else if (month === lastMonth && year === lastMonthYear) {
+            lastMonthByCategory[e.categoryId] = (lastMonthByCategory[e.categoryId] || 0) + e.amount;
+        }
+    });
+
+    // Check for unusual spending (>30% increase)
+    for (const categoryId of Object.keys(thisMonthByCategory)) {
+        const thisMonth = thisMonthByCategory[categoryId] || 0;
+        const lastMonthAmt = lastMonthByCategory[categoryId] || 0;
+
+        if (lastMonthAmt > 0) {
+            const change = ((thisMonth - lastMonthAmt) / lastMonthAmt) * 100;
+            if (change > 30) {
+                const category = categories.find(c => c.id === categoryId);
+                if (category) {
+                    alerts.push({
+                        type: 'warning',
+                        message: `${category.icon} ${category.name} spending is up ${change.toFixed(0)}% vs last month`
+                    });
+                }
+            }
+        }
+    }
+
+    // Check budget overruns
+    for (const [categoryId, budget] of Object.entries(budgets)) {
+        const spent = thisMonthByCategory[categoryId] || 0;
+        if (spent > budget) {
+            const category = categories.find(c => c.id === categoryId);
+            if (category) {
+                alerts.push({
+                    type: 'danger',
+                    message: `${category.icon} ${category.name} is over budget by ₹${(spent - budget).toFixed(2)}`
+                });
+            }
+        } else if (spent > budget * 0.9) {
+            const category = categories.find(c => c.id === categoryId);
+            if (category) {
+                alerts.push({
+                    type: 'warning',
+                    message: `${category.icon} ${category.name} is at ${((spent / budget) * 100).toFixed(0)}% of budget`
+                });
+            }
+        }
+    }
+
+    // Display alerts
+    if (alerts.length === 0) {
+        container.innerHTML = '<div class="alert-item alert-success">✓ No unusual spending detected. Keep it up!</div>';
+    } else {
+        container.innerHTML = alerts.map(a =>
+            `<div class="alert-item alert-${a.type}">${a.message}</div>`
+        ).join('');
+    }
+}
+
+function renderBudgetTracking() {
+    const container = document.getElementById('budgetTracking');
+
+    if (Object.keys(budgets).length === 0) {
+        container.innerHTML = '<p class="text-muted">No budgets set. Click "Set Budgets" to get started.</p>';
+        return;
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Get this month's spending by category
+    const spending = {};
+    expenses.forEach(e => {
+        const d = new Date(e.date);
+        if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+            spending[e.categoryId] = (spending[e.categoryId] || 0) + e.amount;
+        }
+    });
+
+    const items = [];
+    for (const [categoryId, budget] of Object.entries(budgets)) {
+        const category = categories.find(c => c.id === categoryId);
+        if (!category || budget <= 0) continue;
+
+        const spent = spending[categoryId] || 0;
+        const percentage = (spent / budget) * 100;
+        const status = percentage >= 100 ? 'over' : percentage >= 80 ? 'warning' : 'under';
+
+        items.push({
+            category,
+            spent,
+            budget,
+            percentage,
+            status
+        });
+    }
+
+    if (items.length === 0) {
+        container.innerHTML = '<p class="text-muted">No budgets set. Click "Set Budgets" to get started.</p>';
+        return;
+    }
+
+    container.innerHTML = items.map(item => `
+        <div class="budget-item">
+            <div class="budget-header">
+                <span class="budget-category">
+                    <span>${item.category.icon}</span>
+                    <span>${item.category.name}</span>
+                </span>
+                <span class="budget-amounts">₹${item.spent.toFixed(2)} / ₹${item.budget.toFixed(2)}</span>
+            </div>
+            <div class="budget-bar">
+                <div class="budget-bar-fill ${item.status}" style="width: ${Math.min(item.percentage, 100)}%"></div>
+            </div>
+            <div class="budget-percentage" style="color: ${item.status === 'over' ? 'var(--danger)' : item.status === 'warning' ? 'var(--warning)' : 'var(--success)'}">
+                ${item.percentage.toFixed(0)}%
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderTopExpenses() {
+    const container = document.getElementById('topExpenses');
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Get this month's expenses sorted by amount
+    const thisMonthExpenses = expenses
+        .filter(e => {
+            const d = new Date(e.date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        })
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+
+    if (thisMonthExpenses.length === 0) {
+        container.innerHTML = '<p class="text-muted">No expenses this month yet.</p>';
+        return;
+    }
+
+    container.innerHTML = thisMonthExpenses.map((expense, index) => {
+        const category = categories.find(c => c.id === expense.categoryId) || { icon: '📦', name: 'Unknown' };
+        const date = new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        return `
+            <div class="top-expense-item">
+                <span class="top-expense-rank">#${index + 1}</span>
+                <span class="top-expense-icon">${category.icon}</span>
+                <div class="top-expense-details">
+                    <h4>${expense.description || category.name}</h4>
+                    <span>${date}</span>
+                </div>
+                <span class="top-expense-amount">₹${expense.amount.toFixed(2)}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderCategoryComparison() {
+    const container = document.getElementById('categoryComparison');
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    // Get spending by category
+    const thisMonthByCategory = {};
+    const lastMonthByCategory = {};
+
+    expenses.forEach(e => {
+        const d = new Date(e.date);
+        const month = d.getMonth();
+        const year = d.getFullYear();
+
+        if (month === currentMonth && year === currentYear) {
+            thisMonthByCategory[e.categoryId] = (thisMonthByCategory[e.categoryId] || 0) + e.amount;
+        } else if (month === lastMonth && year === lastMonthYear) {
+            lastMonthByCategory[e.categoryId] = (lastMonthByCategory[e.categoryId] || 0) + e.amount;
+        }
+    });
+
+    // Get all categories that have expenses
+    const allCategories = new Set([
+        ...Object.keys(thisMonthByCategory),
+        ...Object.keys(lastMonthByCategory)
+    ]);
+
+    if (allCategories.size === 0) {
+        container.innerHTML = '<p class="text-muted">No data to compare yet.</p>';
+        return;
+    }
+
+    const comparisons = [];
+    allCategories.forEach(categoryId => {
+        const category = categories.find(c => c.id === categoryId);
+        if (!category) return;
+
+        const thisMonth = thisMonthByCategory[categoryId] || 0;
+        const lastMonthAmt = lastMonthByCategory[categoryId] || 0;
+        const change = lastMonthAmt > 0 ? ((thisMonth - lastMonthAmt) / lastMonthAmt) * 100 : (thisMonth > 0 ? 100 : 0);
+
+        comparisons.push({
+            category,
+            thisMonth,
+            lastMonth: lastMonthAmt,
+            change
+        });
+    });
+
+    // Sort by absolute change
+    comparisons.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+
+    container.innerHTML = comparisons.slice(0, 5).map(item => {
+        const changeClass = item.change > 5 ? 'up' : item.change < -5 ? 'down' : 'same';
+        const changeSymbol = item.change > 0 ? '↑' : item.change < 0 ? '↓' : '→';
+
+        return `
+            <div class="comparison-item">
+                <span class="comparison-icon">${item.category.icon}</span>
+                <div class="comparison-details">
+                    <div class="comparison-name">${item.category.name}</div>
+                    <div class="comparison-amounts">₹${item.thisMonth.toFixed(0)} vs ₹${item.lastMonth.toFixed(0)}</div>
+                </div>
+                <span class="comparison-change ${changeClass}">${changeSymbol} ${Math.abs(item.change).toFixed(0)}%</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function calculateStreaks() {
+    if (expenses.length === 0) {
+        document.getElementById('noSpendStreak').textContent = '0 days';
+        document.getElementById('spendingStreak').textContent = '0 days';
+        return;
+    }
+
+    // Get unique dates with expenses
+    const expenseDates = new Set(
+        expenses.map(e => new Date(e.date).toDateString())
+    );
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Calculate current no-spend streak (consecutive days without spending ending today or yesterday)
+    let noSpendStreak = 0;
+    let checkDate = new Date(today);
+
+    // If we spent today, no streak
+    if (!expenseDates.has(checkDate.toDateString())) {
+        noSpendStreak = 1;
+        checkDate.setDate(checkDate.getDate() - 1);
+
+        while (!expenseDates.has(checkDate.toDateString())) {
+            noSpendStreak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+            if (noSpendStreak > 365) break; // Safety limit
+        }
+    }
+
+    // Calculate spending streak (consecutive days with spending)
+    let spendingStreak = 0;
+    checkDate = new Date(today);
+
+    // Start from the most recent spending day
+    while (!expenseDates.has(checkDate.toDateString()) && spendingStreak < 30) {
+        checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    while (expenseDates.has(checkDate.toDateString())) {
+        spendingStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+        if (spendingStreak > 365) break; // Safety limit
+    }
+
+    document.getElementById('noSpendStreak').textContent = `${noSpendStreak} day${noSpendStreak !== 1 ? 's' : ''}`;
+    document.getElementById('spendingStreak').textContent = `${spendingStreak} day${spendingStreak !== 1 ? 's' : ''}`;
+}
+
+// Budget Modal Functions
+function openBudgetModal() {
+    const modal = document.getElementById('budgetModal');
+    const form = document.getElementById('budgetForm');
+
+    form.innerHTML = categories.map(category => `
+        <div class="budget-form-item">
+            <div class="category-info">
+                <span class="category-icon">${category.icon}</span>
+                <span class="category-name">${category.name}</span>
+            </div>
+            <input type="number" 
+                   id="budget-${category.id}" 
+                   placeholder="₹0.00" 
+                   min="0" 
+                   step="100"
+                   value="${budgets[category.id] || ''}">
+        </div>
+    `).join('');
+
+    modal.style.display = 'block';
+}
+
+function closeBudgetModal() {
+    document.getElementById('budgetModal').style.display = 'none';
+}
+
+function saveBudgets() {
+    const newBudgets = {};
+
+    categories.forEach(category => {
+        const input = document.getElementById(`budget-${category.id}`);
+        if (input && input.value) {
+            const value = parseFloat(input.value);
+            if (value > 0) {
+                newBudgets[category.id] = value;
+            }
+        }
+    });
+
+    budgets = newBudgets;
+    localStorage.setItem('budgets', JSON.stringify(budgets));
+
+    closeBudgetModal();
+    loadInsights();
 }

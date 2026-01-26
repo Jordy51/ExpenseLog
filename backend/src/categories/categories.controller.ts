@@ -4,7 +4,7 @@ import { CreateCategoryDto } from './category.interface';
 
 @Controller('api/categories')
 export class CategoriesController {
-  constructor(private readonly categoriesService: CategoriesService) {}
+  constructor(private readonly categoriesService: CategoriesService) { }
 
   @Get()
   findAll() {
@@ -27,7 +27,7 @@ export class CategoriesController {
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return { success: this.categoriesService.delete(id) };
+  async delete(@Param('id') id: string) {
+    return { success: await this.categoriesService.delete(id) };
   }
 }

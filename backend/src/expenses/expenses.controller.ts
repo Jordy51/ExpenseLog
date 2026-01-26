@@ -42,7 +42,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return { success: this.expensesService.delete(id) };
+  async delete(@Param('id') id: string) {
+    return { success: await this.expensesService.delete(id) };
   }
 }

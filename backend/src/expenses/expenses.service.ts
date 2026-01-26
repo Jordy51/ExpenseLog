@@ -1,116 +1,81 @@
 import { Injectable } from '@nestjs/common';
-import { Expense, CreateExpenseDto, ExpensePattern, MonthlyTrend } from './expense.interface';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Between } from 'typeorm';
+import { ExpenseEntity } from './expense.entity';
+import { CreateExpenseDto, ExpensePattern, MonthlyTrend } from './expense.interface';
 import { CategoriesService } from '../categories/categories.service';
-import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
 export class ExpensesService {
-  private expenses: Expense[] = [];
-  private dataPath = path.join(__dirname, '..', '..', 'data', 'expenses.json');
+  constructor(
+    @InjectRepository(ExpenseEntity)
+    private expenseRepository: Repository<ExpenseEntity>,
+    private readonly categoriesService: CategoriesService,
+  ) { }
 
-  constructor(private readonly categoriesService: CategoriesService) {
-    this.loadData();
-  }
-
-  private loadData(): void {
-    try {
-      const dir = path.dirname(this.dataPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      if (fs.existsSync(this.dataPath)) {
-        const data = fs.readFileSync(this.dataPath, 'utf-8');
-        this.expenses = JSON.parse(data);
-      }
-    } catch (error) {
-      this.expenses = [];
-    }
-  }
-
-  private saveData(): void {
-    const dir = path.dirname(this.dataPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(this.dataPath, JSON.stringify(this.expenses, null, 2));
-  }
-
-  findAll(sortBy?: string, sortOrder?: string): Expense[] {
-    const sorted = [...this.expenses];
-    const order = sortOrder === 'asc' ? 1 : -1;
+  async findAll(sortBy?: string, sortOrder?: string): Promise<ExpenseEntity[]> {
+    const order: any = {};
+    const orderDirection = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     switch (sortBy) {
       case 'amount':
-        sorted.sort((a, b) => (a.amount - b.amount) * order);
+        order.amount = orderDirection;
         break;
       case 'category':
-        sorted.sort((a, b) => {
-          const catA = this.categoriesService.findOne(a.categoryId)?.name || '';
-          const catB = this.categoriesService.findOne(b.categoryId)?.name || '';
-          return catA.localeCompare(catB) * order;
-        });
+        order.categoryId = orderDirection;
         break;
       case 'date':
       default:
-        sorted.sort((a, b) => (new Date(a.date).getTime() - new Date(b.date).getTime()) * order);
+        order.date = orderDirection;
         break;
     }
 
-    return sorted;
+    return this.expenseRepository.find({ order });
   }
 
-  findOne(id: string): Expense | undefined {
-    return this.expenses.find(e => e.id === id);
+  async findOne(id: string): Promise<ExpenseEntity | null> {
+    return this.expenseRepository.findOne({ where: { id: parseInt(id) } });
   }
 
-  create(dto: CreateExpenseDto): Expense {
-    const expense: Expense = {
-      id: Date.now().toString(),
+  async create(dto: CreateExpenseDto): Promise<ExpenseEntity> {
+    const expense = this.expenseRepository.create({
       description: dto.description,
       amount: dto.amount,
-      categoryId: dto.categoryId,
+      categoryId: parseInt(dto.categoryId),
       date: dto.date ? new Date(dto.date) : new Date(),
-      createdAt: new Date(),
-    };
-    this.expenses.push(expense);
-    this.saveData();
-    return expense;
+    });
+    return this.expenseRepository.save(expense);
   }
 
-  update(id: string, dto: Partial<CreateExpenseDto>): Expense | null {
-    const index = this.expenses.findIndex(e => e.id === id);
-    if (index === -1) return null;
+  async update(id: string, dto: Partial<CreateExpenseDto>): Promise<ExpenseEntity | null> {
+    const expense = await this.expenseRepository.findOne({ where: { id: parseInt(id) } });
+    if (!expense) return null;
 
-    this.expenses[index] = {
-      ...this.expenses[index],
-      ...dto,
-      date: dto.date ? new Date(dto.date) : this.expenses[index].date
-    };
-    this.saveData();
-    return this.expenses[index];
+    if (dto.description !== undefined) expense.description = dto.description;
+    if (dto.amount !== undefined) expense.amount = dto.amount;
+    if (dto.categoryId !== undefined) expense.categoryId = parseInt(dto.categoryId);
+    if (dto.date !== undefined) expense.date = new Date(dto.date);
+
+    return this.expenseRepository.save(expense);
   }
 
-  delete(id: string): boolean {
-    const index = this.expenses.findIndex(e => e.id === id);
-    if (index === -1) return false;
-
-    this.expenses.splice(index, 1);
-    this.saveData();
-    return true;
+  async delete(id: string): Promise<boolean> {
+    const result = await this.expenseRepository.delete(parseInt(id));
+    return (result.affected ?? 0) > 0;
   }
 
-  getPatterns(): ExpensePattern[] {
-    const categories = this.categoriesService.findAll();
-    const totalExpenses = this.expenses.reduce((sum, e) => sum + e.amount, 0);
+  async getPatterns(): Promise<ExpensePattern[]> {
+    const categories = await this.categoriesService.findAll();
+    const expenses = await this.expenseRepository.find();
+    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
     const patterns: ExpensePattern[] = categories.map(category => {
-      const categoryExpenses = this.expenses.filter(e => e.categoryId === category.id);
-      const totalAmount = categoryExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const categoryExpenses = expenses.filter(e => e.categoryId === category.id);
+      const totalAmount = categoryExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
       const count = categoryExpenses.length;
 
       return {
-        categoryId: category.id,
+        categoryId: category.id.toString(),
         categoryName: category.name,
         totalAmount,
         count,
@@ -122,7 +87,8 @@ export class ExpensesService {
     return patterns.filter(p => p.count > 0).sort((a, b) => b.totalAmount - a.totalAmount);
   }
 
-  getMonthlyTrends(months: number = 6): MonthlyTrend[] {
+  async getMonthlyTrends(months: number = 6): Promise<MonthlyTrend[]> {
+    const expenses = await this.expenseRepository.find();
     const trends: MonthlyTrend[] = [];
     const now = new Date();
 
@@ -132,19 +98,19 @@ export class ExpensesService {
       const year = date.getFullYear();
       const month = date.getMonth();
 
-      const monthExpenses = this.expenses.filter(e => {
+      const monthExpenses = expenses.filter(e => {
         const expDate = new Date(e.date);
         return expDate.getFullYear() === year && expDate.getMonth() === month;
       });
 
       const byCategory: { [key: string]: number } = {};
       monthExpenses.forEach(e => {
-        byCategory[e.categoryId] = (byCategory[e.categoryId] || 0) + e.amount;
+        byCategory[e.categoryId.toString()] = (byCategory[e.categoryId.toString()] || 0) + Number(e.amount);
       });
 
       trends.push({
         month: monthStr,
-        total: monthExpenses.reduce((sum, e) => sum + e.amount, 0),
+        total: monthExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
         byCategory,
       });
     }
@@ -152,28 +118,30 @@ export class ExpensesService {
     return trends;
   }
 
-  getSummary() {
+  async getSummary() {
+    const expenses = await this.expenseRepository.find();
     const now = new Date();
-    const thisMonth = this.expenses.filter(e => {
+
+    const thisMonth = expenses.filter(e => {
       const d = new Date(e.date);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
 
-    const lastMonth = this.expenses.filter(e => {
+    const lastMonth = expenses.filter(e => {
       const d = new Date(e.date);
       const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear();
     });
 
-    const thisMonthTotal = thisMonth.reduce((sum, e) => sum + e.amount, 0);
-    const lastMonthTotal = lastMonth.reduce((sum, e) => sum + e.amount, 0);
+    const thisMonthTotal = thisMonth.reduce((sum, e) => sum + Number(e.amount), 0);
+    const lastMonthTotal = lastMonth.reduce((sum, e) => sum + Number(e.amount), 0);
 
     return {
-      totalExpenses: this.expenses.reduce((sum, e) => sum + e.amount, 0),
+      totalExpenses: expenses.reduce((sum, e) => sum + Number(e.amount), 0),
       thisMonth: thisMonthTotal,
       lastMonth: lastMonthTotal,
       monthlyChange: lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 : 0,
-      totalTransactions: this.expenses.length,
+      totalTransactions: expenses.length,
     };
   }
 }

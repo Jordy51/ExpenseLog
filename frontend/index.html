@@ -47,9 +47,9 @@
             </div>
         </section>
 
-        <!-- Main Content -->
+        <!-- Main Content - 3 Column Layout -->
         <div class="main-content">
-            <!-- Left Panel - Forms -->
+            <!-- Left Panel - Add Expense Form -->
             <div class="left-panel">
                 <!-- Add Expense Form -->
                 <section class="card">
@@ -116,8 +116,8 @@
                 </div>
             </div>
 
-            <!-- Right Panel - Charts & Data -->
-            <div class="right-panel">
+            <!-- Center Panel - Charts & Patterns -->
+            <div class="center-panel">
                 <!-- Charts -->
                 <section class="card charts-section">
                     <h2>📊 Spending Overview</h2>
@@ -139,28 +139,129 @@
                     <div id="patternsList" class="patterns-list"></div>
                 </section>
 
+                <!-- Collapsible Insights Section -->
+                <div class="collapsible-section collapsible-section-large">
+                    <button class="collapsible-toggle" onclick="toggleInsightsSection()">
+                        <span>💡 Insights & Analytics</span>
+                        <span class="toggle-icon">▼</span>
+                    </button>
+
+                    <div class="collapsible-content" id="insightsSection">
+                        <!-- Quick Stats Row -->
+                        <div class="insights-grid">
+                            <div class="insight-card">
+                                <div class="insight-icon">📅</div>
+                                <div class="insight-content">
+                                    <span class="insight-label">Daily Average</span>
+                                    <span class="insight-value" id="dailyAverage">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="insight-card">
+                                <div class="insight-icon">📆</div>
+                                <div class="insight-content">
+                                    <span class="insight-label">Weekly Average</span>
+                                    <span class="insight-value" id="weeklyAverage">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="insight-card">
+                                <div class="insight-icon">🎯</div>
+                                <div class="insight-content">
+                                    <span class="insight-label">Predicted Monthly</span>
+                                    <span class="insight-value" id="predictedMonthly">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="insight-card">
+                                <div class="insight-icon">🔥</div>
+                                <div class="insight-content">
+                                    <span class="insight-label">Peak Spending Day</span>
+                                    <span class="insight-value" id="peakDay">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Spending Alerts -->
+                        <div class="insight-block">
+                            <h3>⚠️ Spending Alerts</h3>
+                            <div id="spendingAlerts" class="alerts-list">
+                                <div class="alert-item alert-neutral">No unusual spending detected</div>
+                            </div>
+                        </div>
+
+                        <!-- Budget Tracking -->
+                        <div class="insight-block">
+                            <h3>💰 Budget Tracking <button class="btn-link" onclick="openBudgetModal()">Set
+                                    Budgets</button></h3>
+                            <div id="budgetTracking" class="budget-list">
+                                <p class="text-muted">No budgets set. Click "Set Budgets" to get started.</p>
+                            </div>
+                        </div>
+
+                        <!-- Top Expenses This Month -->
+                        <div class="insight-block">
+                            <h3>🏆 Top Expenses This Month</h3>
+                            <div id="topExpenses" class="top-expenses-list"></div>
+                        </div>
+
+                        <!-- Category Comparison -->
+                        <div class="insight-block">
+                            <h3>📊 vs Last Month</h3>
+                            <div id="categoryComparison" class="comparison-list"></div>
+                        </div>
+
+                        <!-- Spending Streaks -->
+                        <div class="insight-block streaks-block">
+                            <div class="streak-item">
+                                <span class="streak-icon">🌟</span>
+                                <div class="streak-content">
+                                    <span class="streak-value" id="noSpendStreak">0 days</span>
+                                    <span class="streak-label">No-Spend Streak</span>
+                                </div>
+                            </div>
+                            <div class="streak-item">
+                                <span class="streak-icon">📈</span>
+                                <div class="streak-content">
+                                    <span class="streak-value" id="spendingStreak">0 days</span>
+                                    <span class="streak-label">Spending Streak</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Recent Expenses -->
+            <div class="right-panel">
                 <!-- Recent Expenses -->
                 <section class="card">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div class="expenses-header">
                         <h2>📝 Recent Expenses</h2>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <select id="sortBy" class="sort-select">
-                                <option value="date">Sort by Date</option>
-                                <option value="amount">Sort by Amount</option>
-                                <option value="category">Sort by Category</option>
-                            </select>
-                            <select id="sortOrder" class="sort-select">
-                                <option value="desc">Descending</option>
-                                <option value="asc">Ascending</option>
-                            </select>
-                            <button class="btn btn-small btn-outline" onclick="openAllTransactionsModal()">View
-                                All</button>
-                        </div>
+                        <button class="btn btn-small btn-outline" onclick="openAllTransactionsModal()">View All</button>
+                    </div>
+                    <div class="expenses-controls">
+                        <select id="sortBy" class="sort-select">
+                            <option value="date">Sort by Date</option>
+                            <option value="amount">Sort by Amount</option>
+                            <option value="category">Sort by Category</option>
+                        </select>
+                        <select id="sortOrder" class="sort-select">
+                            <option value="desc">Descending</option>
+                            <option value="asc">Ascending</option>
+                        </select>
                     </div>
                     <div id="expensesList" class="expenses-list"></div>
                 </section>
             </div>
+        </div>
+    </div>
+
+    <!-- Budget Modal -->
+    <div id="budgetModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeBudgetModal()">&times;</span>
+            <h2>💰 Set Monthly Budgets</h2>
+            <p class="modal-subtitle">Set spending limits for each category</p>
+            <div id="budgetForm" class="budget-form"></div>
+            <button class="btn btn-primary" onclick="saveBudgets()">Save Budgets</button>
         </div>
     </div>
 
