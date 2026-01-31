@@ -205,19 +205,36 @@ function showToast(message, type = 'info') {
 // Set default date to today
 function initializeDateInput() {
     const today = new Date();
+    const dateInput = document.getElementById('date');
+    const todayStr = today.toISOString().split('T')[0];
 
-    // Initialize main date calendar (inline)
-    dateCalendar = flatpickr('#date', {
-        inline: true,
-        appendTo: document.getElementById('dateCalendar'),
-        defaultDate: today,
-        dateFormat: 'Y-m-d',
-        onChange: function (selectedDates, dateStr) {
-            document.getElementById('date').value = dateStr;
+    // Set the value first (works without flatpickr)
+    dateInput.value = todayStr;
+
+    // Initialize flatpickr if available
+    if (typeof flatpickr !== 'undefined') {
+        try {
+            dateCalendar = flatpickr('#date', {
+                inline: true,
+                appendTo: document.getElementById('dateCalendar'),
+                defaultDate: today,
+                dateFormat: 'Y-m-d',
+                onChange: function (selectedDates, dateStr) {
+                    document.getElementById('date').value = dateStr;
+                }
+            });
+        } catch (e) {
+            console.warn('[App] Flatpickr failed to initialize:', e);
+            // Fallback: show native date input
+            dateInput.type = 'date';
+            dateInput.style.display = 'block';
         }
-    });
-
-    document.getElementById('date').value = today.toISOString().split('T')[0];
+    } else {
+        console.log('[App] Flatpickr not available, using native date input');
+        // Fallback: show native date input
+        dateInput.type = 'date';
+        dateInput.style.display = 'block';
+    }
 }
 
 // Event Listeners
@@ -539,21 +556,34 @@ function editExpense(id) {
     renderCategoryOptions('editCategoryOptions', expense.categoryId);
 
     const expenseDate = new Date(expense.date).toISOString().split('T')[0];
-    document.getElementById('editDate').value = expenseDate;
+    const editDateInput = document.getElementById('editDate');
+    editDateInput.value = expenseDate;
 
     // Initialize or update edit date calendar
-    if (editDateCalendar) {
-        editDateCalendar.setDate(expenseDate);
-    } else {
-        editDateCalendar = flatpickr('#editDate', {
-            inline: true,
-            appendTo: document.getElementById('editDateCalendar'),
-            defaultDate: expenseDate,
-            dateFormat: 'Y-m-d',
-            onChange: function (selectedDates, dateStr) {
-                document.getElementById('editDate').value = dateStr;
+    if (typeof flatpickr !== 'undefined') {
+        try {
+            if (editDateCalendar) {
+                editDateCalendar.setDate(expenseDate);
+            } else {
+                editDateCalendar = flatpickr('#editDate', {
+                    inline: true,
+                    appendTo: document.getElementById('editDateCalendar'),
+                    defaultDate: expenseDate,
+                    dateFormat: 'Y-m-d',
+                    onChange: function (selectedDates, dateStr) {
+                        document.getElementById('editDate').value = dateStr;
+                    }
+                });
             }
-        });
+        } catch (e) {
+            console.warn('[App] Flatpickr edit calendar failed:', e);
+            editDateInput.type = 'date';
+            editDateInput.style.display = 'block';
+        }
+    } else {
+        // Fallback: show native date input
+        editDateInput.type = 'date';
+        editDateInput.style.display = 'block';
     }
 
     document.getElementById('editModal').style.display = 'block';
@@ -704,6 +734,16 @@ function renderPatterns(patterns) {
 }
 
 function renderCategoryChart(patterns) {
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        console.log('[App] Chart.js not available, skipping category chart');
+        const container = document.getElementById('categoryChart')?.parentElement;
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; color: var(--gray-500); padding: 20px;">Charts unavailable offline</p>';
+        }
+        return;
+    }
+
     const ctx = document.getElementById('categoryChart').getContext('2d');
 
     if (categoryChart) {
@@ -765,6 +805,16 @@ async function loadTrends() {
 }
 
 function renderTrendChart(trends) {
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        console.log('[App] Chart.js not available, skipping trend chart');
+        const container = document.getElementById('trendChart')?.parentElement;
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; color: var(--gray-500); padding: 20px;">Charts unavailable offline</p>';
+        }
+        return;
+    }
+
     const ctx = document.getElementById('trendChart').getContext('2d');
 
     if (trendChart) {

@@ -1,10 +1,10 @@
 // Service Worker for Expense Tracker PWA
-const CACHE_NAME = 'expense-tracker-v1';
-const STATIC_CACHE = 'expense-tracker-static-v1';
-const DYNAMIC_CACHE = 'expense-tracker-dynamic-v1';
+const CACHE_VERSION = 'v4';
+const STATIC_CACHE = `expense-tracker-static-${CACHE_VERSION}`;
+const DYNAMIC_CACHE = `expense-tracker-dynamic-${CACHE_VERSION}`;
 
-// Assets to cache immediately on install
-const STATIC_ASSETS = [
+// All assets to cache - now all local for reliable offline support
+const LOCAL_ASSETS = [
     '/',
     '/index.html',
     '/styles.css',
@@ -12,20 +12,21 @@ const STATIC_ASSETS = [
     '/offline-db.js',
     '/sync.js',
     '/manifest.json',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-    'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
-    'https://cdn.jsdelivr.net/npm/chart.js',
-    'https://cdn.jsdelivr.net/npm/flatpickr'
+    '/lib/chart.min.js',
+    '/lib/flatpickr.min.js',
+    '/lib/flatpickr.min.css',
+    '/icons/icon-192.svg'
 ];
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
-    console.log('[SW] Installing service worker...');
+    console.log('[SW] Installing service worker v3...');
     event.waitUntil(
         caches.open(STATIC_CACHE)
-            .then((cache) => {
-                console.log('[SW] Caching static assets');
-                return cache.addAll(STATIC_ASSETS);
+            .then(async (cache) => {
+                console.log('[SW] Caching all local assets');
+                await cache.addAll(LOCAL_ASSETS);
+                console.log('[SW] All assets cached successfully');
             })
             .then(() => self.skipWaiting())
             .catch((err) => console.error('[SW] Cache install failed:', err))
@@ -67,7 +68,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Static assets - cache first, then network
+    // All other requests - cache first, then network
     event.respondWith(cacheFirst(request));
 });
 
@@ -91,7 +92,8 @@ async function cacheFirst(request) {
         if (request.mode === 'navigate') {
             return caches.match('/index.html');
         }
-        throw error;
+        // Return empty response for other failed requests
+        return new Response('', { status: 503, statusText: 'Offline' });
     }
 }
 

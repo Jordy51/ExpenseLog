@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { ExpenseEntity } from './expense.entity';
@@ -38,10 +38,14 @@ export class ExpensesService {
   }
 
   async create(dto: CreateExpenseDto): Promise<ExpenseEntity> {
+    const categoryId = parseInt(dto.categoryId);
+    if (isNaN(categoryId)) {
+      throw new BadRequestException('Invalid categoryId: must be a valid number');
+    }
     const expense = this.expenseRepository.create({
       description: dto.description,
       amount: dto.amount,
-      categoryId: parseInt(dto.categoryId),
+      categoryId,
       date: dto.date ? new Date(dto.date) : new Date(),
     });
     return this.expenseRepository.save(expense);
@@ -53,7 +57,13 @@ export class ExpensesService {
 
     if (dto.description !== undefined) expense.description = dto.description;
     if (dto.amount !== undefined) expense.amount = dto.amount;
-    if (dto.categoryId !== undefined) expense.categoryId = parseInt(dto.categoryId);
+    if (dto.categoryId !== undefined) {
+      const categoryId = parseInt(dto.categoryId);
+      if (isNaN(categoryId)) {
+        throw new BadRequestException('Invalid categoryId: must be a valid number');
+      }
+      expense.categoryId = categoryId;
+    }
     if (dto.date !== undefined) expense.date = new Date(dto.date);
 
     return this.expenseRepository.save(expense);
