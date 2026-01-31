@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A full-stack expense tracking application with a NestJS (TypeScript) backend, PostgreSQL database, and HTML/JavaScript frontend.
+A full-stack expense tracking application with a NestJS (TypeScript) backend, PostgreSQL database, and a Progressive Web App (PWA) frontend that works offline.
 
 ## Features
 
@@ -13,6 +13,9 @@ A full-stack expense tracking application with a NestJS (TypeScript) backend, Po
 - ✅ **Patterns Analysis** - See spending patterns with percentages and averages
 - ✅ **Summary Dashboard** - View this month's total, overall spending, and transaction count
 - ✅ **Date Picker** - Select expense dates with Flatpickr
+- ✅ **Progressive Web App (PWA)** - Install on desktop or mobile
+- ✅ **Offline Support** - Full offline functionality with local IndexedDB storage
+- ✅ **Background Sync** - Automatically syncs data when back online
 
 ## Prerequisites
 
@@ -30,7 +33,7 @@ A full-stack expense tracking application with a NestJS (TypeScript) backend, Po
      DB_PORT=5432
      DB_USERNAME=your_username
      DB_PASSWORD=your_password
-     DB_DATABASE=expense_tracker
+     DB_NAME=expense_tracker
      ```
 
 2. **Install dependencies:**
@@ -49,6 +52,8 @@ A full-stack expense tracking application with a NestJS (TypeScript) backend, Po
    ```bash
    npm run start:dev
    ```
+   
+   Or on Windows, simply double-click `start-server.bat` in the root folder.
 
 5. **Open your browser:**
    Navigate to [http://localhost:3000](http://localhost:3000)
@@ -57,6 +62,7 @@ A full-stack expense tracking application with a NestJS (TypeScript) backend, Po
 
 ```
 ExpenseLog/
+├── start-server.bat             # Quick start script (Windows)
 ├── backend/
 │   ├── src/
 │   │   ├── main.ts              # Application entry point
@@ -80,7 +86,16 @@ ExpenseLog/
 └── frontend/
     ├── index.html               # Main HTML page
     ├── styles.css               # Styles
-    └── app.js                   # Frontend JavaScript
+    ├── app.js                   # Frontend JavaScript
+    ├── offline-db.js            # IndexedDB for offline storage
+    ├── sync.js                  # Background sync functionality
+    ├── sw.js                    # Service Worker for PWA/offline
+    ├── manifest.json            # PWA manifest
+    ├── icons/                   # App icons
+    └── lib/                     # Third-party libraries
+        ├── chart.min.js
+        ├── flatpickr.min.js
+        └── flatpickr.min.css
 ```
 
 ## API Endpoints
@@ -128,5 +143,6 @@ ExpenseLog/
 - **Backend:** NestJS, TypeScript, TypeORM
 - **Database:** PostgreSQL
 - **Frontend:** HTML5, CSS3, JavaScript (ES6+)
+- **PWA:** Service Worker, IndexedDB, Web App Manifest
 - **Charts:** Chart.js
 - **Date Picker:** Flatpickr
