@@ -8,6 +8,8 @@ let categoryChart = null;
 let trendChart = null;
 let dateCalendar = null;
 let editDateCalendar = null;
+let isOnline = navigator.onLine;
+let dbReady = false;
 
 // Toggle Category Section
 function toggleCategorySection() {
@@ -122,7 +124,10 @@ function renderAllExpenses() {
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize offline database first
+    await initOfflineSupport();
+
     initializeDateInput();
     loadCategories();
     loadExpenses(); // loadInsights is called inside after data is fetched
@@ -130,7 +135,72 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPatterns();
     loadTrends();
     setupEventListeners();
+
+    // Update online status indicator
+    updateOnlineStatusUI();
 });
+
+// Initialize offline support
+async function initOfflineSupport() {
+    try {
+        await offlineDB.init();
+        dbReady = true;
+        console.log('[App] Offline database ready');
+
+        // Setup sync listeners
+        syncManager.onSync((event, data) => {
+            if (event === 'sync-complete') {
+                console.log('[App] Sync complete, refreshing data...');
+                loadCategories();
+                loadExpenses();
+                loadSummary();
+                showToast('Data synced successfully!', 'success');
+            } else if (event === 'sync-error') {
+                showToast('Sync failed. Will retry when online.', 'error');
+            }
+        });
+
+        // Initial sync if online
+        if (navigator.onLine) {
+            syncManager.syncAll();
+        }
+    } catch (error) {
+        console.error('[App] Failed to initialize offline support:', error);
+    }
+}
+
+// Update online status UI
+function updateOnlineStatusUI() {
+    const indicator = document.getElementById('onlineStatus');
+    if (indicator) {
+        isOnline = navigator.onLine;
+        indicator.className = `online-status ${isOnline ? 'online' : 'offline'}`;
+        indicator.innerHTML = isOnline
+            ? '<span class="status-dot"></span> Online'
+            : '<span class="status-dot"></span> Offline (changes saved locally)';
+    }
+}
+
+// Show toast notification
+function showToast(message, type = 'info') {
+    // Remove existing toast
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) existingToast.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 
 // Set default date to today
 function initializeDateInput() {
@@ -191,23 +261,46 @@ function setupEventListeners() {
 
 // API Functions
 async function fetchAPI(endpoint, options = {}) {
-    try {
-        const response = await fetch(`${API_URL}${endpoint}`, {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            ...options,
-        });
-        return await response.json();
-    } catch (error) {
-        console.error('API Error:', error);
-        return null;
+    // Try network first if online
+    if (navigator.onLine) {
+        try {
+            const response = await fetch(`${API_URL}${endpoint}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                ...options,
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('API Error:', error);
+            // Fall through to offline handling
+        }
     }
+
+    // Offline or network failed - return null (individual functions will handle offline)
+    console.log('[App] Offline mode - using local data');
+    return null;
 }
 
 // Categories
 async function loadCategories() {
-    categories = await fetchAPI('/categories') || [];
+    // Try to fetch from server
+    const serverCategories = await fetchAPI('/categories');
+
+    if (serverCategories) {
+        categories = serverCategories;
+        // Save to offline storage
+        if (dbReady) {
+            await offlineDB.syncCategories(categories);
+        }
+    } else if (dbReady) {
+        // Load from offline storage
+        categories = await offlineDB.getCategories();
+        console.log(`[App] Loaded ${categories.length} categories from offline storage`);
+    } else {
+        categories = [];
+    }
+
     renderCategories();
     renderCategoryOptions('categoryOptions');
     renderCategoryOptions('editCategoryOptions');
@@ -218,26 +311,59 @@ async function addCategory() {
     const icon = document.getElementById('categoryIcon').value || '📁';
     const color = document.getElementById('categoryColor').value;
 
-    const category = await fetchAPI('/categories', {
-        method: 'POST',
-        body: JSON.stringify({ name, icon, color }),
-    });
+    const categoryData = { name, icon, color };
 
-    if (category) {
-        categories.push(category);
-        renderCategories();
-        renderCategoryOptions('categoryOptions');
-        renderCategoryOptions('editCategoryOptions');
-        document.getElementById('categoryForm').reset();
-        document.getElementById('categoryColor').value = '#36A2EB';
+    if (navigator.onLine) {
+        // Online: send to server
+        const category = await fetchAPI('/categories', {
+            method: 'POST',
+            body: JSON.stringify(categoryData),
+        });
+
+        if (category) {
+            categories.push(category);
+            if (dbReady) await offlineDB.saveCategory(category);
+        }
+    } else {
+        // Offline: save locally with temp ID
+        const tempCategory = {
+            ...categoryData,
+            id: syncManager.generateTempId(),
+            syncStatus: 'pending'
+        };
+        categories.push(tempCategory);
+
+        if (dbReady) {
+            await offlineDB.saveCategory(tempCategory);
+            await syncManager.queueOperation('create', 'categories', categoryData);
+        }
+        showToast('Category saved offline. Will sync when online.', 'info');
     }
+
+    renderCategories();
+    renderCategoryOptions('categoryOptions');
+    renderCategoryOptions('editCategoryOptions');
+    document.getElementById('categoryForm').reset();
+    document.getElementById('categoryColor').value = '#36A2EB';
 }
 
 async function deleteCategory(id) {
     if (!confirm('Delete this category? Expenses in this category will remain.')) return;
 
-    await fetchAPI(`/categories/${id}`, { method: 'DELETE' });
+    if (navigator.onLine) {
+        await fetchAPI(`/categories/${id}`, { method: 'DELETE' });
+    } else {
+        // Queue delete operation for sync
+        if (dbReady) {
+            await syncManager.queueOperation('delete', 'categories', null, id);
+        }
+        showToast('Delete queued. Will sync when online.', 'info');
+    }
+
+    // Remove locally
     categories = categories.filter(c => c.id !== id);
+    if (dbReady) await offlineDB.deleteCategory(id);
+
     renderCategories();
     renderCategoryOptions('categoryOptions');
     renderCategoryOptions('editCategoryOptions');
@@ -297,7 +423,35 @@ function selectCategory(containerId, categoryId) {
 async function loadExpenses() {
     const sortBy = document.getElementById('sortBy')?.value || 'date';
     const sortOrder = document.getElementById('sortOrder')?.value || 'desc';
-    expenses = await fetchAPI(`/expenses?sortBy=${sortBy}&sortOrder=${sortOrder}`) || [];
+
+    // Try to fetch from server
+    const serverExpenses = await fetchAPI(`/expenses?sortBy=${sortBy}&sortOrder=${sortOrder}`);
+
+    if (serverExpenses) {
+        expenses = serverExpenses;
+        // Save to offline storage
+        if (dbReady) {
+            await offlineDB.syncExpenses(expenses);
+        }
+    } else if (dbReady) {
+        // Load from offline storage
+        expenses = await offlineDB.getExpenses();
+        console.log(`[App] Loaded ${expenses.length} expenses from offline storage`);
+
+        // Apply sorting locally
+        expenses.sort((a, b) => {
+            let comparison = 0;
+            if (sortBy === 'date') {
+                comparison = new Date(a.date) - new Date(b.date);
+            } else if (sortBy === 'amount') {
+                comparison = a.amount - b.amount;
+            }
+            return sortOrder === 'desc' ? -comparison : comparison;
+        });
+    } else {
+        expenses = [];
+    }
+
     renderExpenses();
     loadInsights(); // Load insights after expenses are fetched
 }
@@ -308,29 +462,63 @@ async function addExpense() {
     const categoryId = document.getElementById('category').value;
     const date = document.getElementById('date').value;
 
-    const expense = await fetchAPI('/expenses', {
-        method: 'POST',
-        body: JSON.stringify({ description, amount, categoryId, date }),
-    });
+    const expenseData = { description, amount, categoryId, date };
 
-    if (expense) {
-        expenses.unshift(expense);
-        renderExpenses();
-        loadSummary();
-        loadPatterns();
-        loadTrends();
-        loadInsights();
-        document.getElementById('expenseForm').reset();
-        renderCategoryOptions('categoryOptions'); // Reset category selection
-        initializeDateInput();
+    if (navigator.onLine) {
+        // Online: send to server
+        const expense = await fetchAPI('/expenses', {
+            method: 'POST',
+            body: JSON.stringify(expenseData),
+        });
+
+        if (expense) {
+            expenses.unshift(expense);
+            if (dbReady) await offlineDB.saveExpense({ ...expense, syncStatus: 'synced' });
+        }
+    } else {
+        // Offline: save locally with temp ID
+        const tempExpense = {
+            ...expenseData,
+            id: syncManager.generateTempId(),
+            syncStatus: 'pending',
+            createdAt: new Date().toISOString()
+        };
+        expenses.unshift(tempExpense);
+
+        if (dbReady) {
+            await offlineDB.saveExpense(tempExpense);
+            await syncManager.queueOperation('create', 'expenses', expenseData);
+        }
+        showToast('Expense saved offline. Will sync when online.', 'info');
     }
+
+    renderExpenses();
+    loadSummary();
+    loadPatterns();
+    loadTrends();
+    loadInsights();
+    document.getElementById('expenseForm').reset();
+    renderCategoryOptions('categoryOptions'); // Reset category selection
+    initializeDateInput();
 }
 
 async function deleteExpense(id) {
     if (!confirm('Delete this expense?')) return;
 
-    await fetchAPI(`/expenses/${id}`, { method: 'DELETE' });
+    if (navigator.onLine) {
+        await fetchAPI(`/expenses/${id}`, { method: 'DELETE' });
+    } else {
+        // Queue delete operation for sync
+        if (dbReady) {
+            await syncManager.queueOperation('delete', 'expenses', null, id);
+        }
+        showToast('Delete queued. Will sync when online.', 'info');
+    }
+
+    // Remove locally
     expenses = expenses.filter(e => e.id !== id);
+    if (dbReady) await offlineDB.deleteExpense(id);
+
     renderExpenses();
     loadSummary();
     loadPatterns();
@@ -378,14 +566,36 @@ async function updateExpense() {
     const categoryId = document.getElementById('editCategory').value;
     const date = document.getElementById('editDate').value;
 
-    const updated = await fetchAPI(`/expenses/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ description, amount, categoryId, date }),
-    });
+    const expenseData = { description, amount, categoryId, date };
+    let updatedExpense;
 
-    if (updated) {
+    if (navigator.onLine) {
+        updatedExpense = await fetchAPI(`/expenses/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(expenseData),
+        });
+
+        if (updatedExpense && dbReady) {
+            await offlineDB.saveExpense({ ...updatedExpense, syncStatus: 'synced' });
+        }
+    } else {
+        // Offline: update locally and queue for sync
+        updatedExpense = {
+            ...expenseData,
+            id,
+            syncStatus: 'pending'
+        };
+
+        if (dbReady) {
+            await offlineDB.saveExpense(updatedExpense);
+            await syncManager.queueOperation('update', 'expenses', expenseData, id);
+        }
+        showToast('Update saved offline. Will sync when online.', 'info');
+    }
+
+    if (updatedExpense) {
         const index = expenses.findIndex(e => e.id === id);
-        if (index !== -1) expenses[index] = updated;
+        if (index !== -1) expenses[index] = updatedExpense;
         renderExpenses();
         loadSummary();
         loadPatterns();
