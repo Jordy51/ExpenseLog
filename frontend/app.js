@@ -87,7 +87,7 @@ function renderAllExpenses() {
 
     // Update summary
     document.getElementById('transactionCount').textContent = `${filtered.length} transaction${filtered.length !== 1 ? 's' : ''}`;
-    document.getElementById('transactionTotal').textContent = `Total: ₹${filtered.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}`;
+    document.getElementById('transactionTotal').textContent = `Total: ₹${filtered.reduce((sum, e) => sum + parseFloat(e.amount), 0).toFixed(2)}`;
 
     if (filtered.length === 0) {
         container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>No transactions found</p></div>';
@@ -97,6 +97,7 @@ function renderAllExpenses() {
     container.innerHTML = filtered.map(expense => {
         const category = categories.find(c => c.id === expense.categoryId) || { icon: '📦', name: 'Unknown', color: '#888' };
         const date = new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const amount = parseFloat(expense.amount) || 0;
 
         return `
             <div class="expense-item">
@@ -108,7 +109,7 @@ function renderAllExpenses() {
                     </div>
                 </div>
                 <div class="expense-amount">
-                    <div class="amount">-₹${expense.amount.toFixed(2)}</div>
+                    <div class="amount">-₹${amount.toFixed(2)}</div>
                     <div class="date">${date}</div>
                 </div>
                 <div class="expense-actions">
@@ -409,18 +410,19 @@ function renderExpenses() {
     container.innerHTML = expenses.slice(0, 20).map(expense => {
         const category = categories.find(c => c.id === expense.categoryId) || { icon: '📦', name: 'Unknown', color: '#888' };
         const date = new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const amount = parseFloat(expense.amount) || 0;
 
         return `
             <div class="expense-item">
                 <div class="expense-info">
                     <span class="expense-icon">${category.icon}</span>
                     <div class="expense-details">
-                        <h4>${expense.description}</h4>
+                        <h4>${expense.description || 'No description'}</h4>
                         <span style="color: ${category.color}">${category.name}</span>
                     </div>
                 </div>
                 <div class="expense-amount">
-                    <div class="amount">-₹${expense.amount.toFixed(2)}</div>
+                    <div class="amount">-₹${amount.toFixed(2)}</div>
                     <div class="date">${date}</div>
                 </div>
                 <div class="expense-actions">
@@ -470,7 +472,7 @@ function renderPatterns(patterns) {
     }
 
     container.innerHTML = patterns.map(pattern => {
-        const category = categories.find(c => c.id === pattern.categoryId) || { color: '#888' };
+        const category = categories.find(c => String(c.id) === String(pattern.categoryId)) || { color: '#888' };
         return `
             <div class="pattern-item">
                 <div class="pattern-bar-container">
@@ -503,7 +505,7 @@ function renderCategoryChart(patterns) {
     }
 
     const categoryColors = patterns.map(p => {
-        const cat = categories.find(c => c.id === p.categoryId);
+        const cat = categories.find(c => String(c.id) === String(p.categoryId));
         return cat ? cat.color : '#888';
     });
 
