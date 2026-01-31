@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A full-stack expense tracking application with a NestJS (TypeScript) backend and HTML/JavaScript frontend.
+A full-stack expense tracking application with a NestJS (TypeScript) backend, PostgreSQL database, and HTML/JavaScript frontend.
 
 ## Features
 
@@ -12,26 +12,45 @@ A full-stack expense tracking application with a NestJS (TypeScript) backend and
   - Bar chart showing monthly trends
 - ✅ **Patterns Analysis** - See spending patterns with percentages and averages
 - ✅ **Summary Dashboard** - View this month's total, overall spending, and transaction count
+- ✅ **Date Picker** - Select expense dates with Flatpickr
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18 or higher)
 - npm (comes with Node.js)
+- [PostgreSQL](https://www.postgresql.org/) (v14 or higher)
 
 ## Installation
 
-1. **Install dependencies:**
+1. **Set up PostgreSQL:**
+   - Create a new PostgreSQL database for the application
+   - Create a `.env` file in the `backend/` directory with your database credentials:
+     ```env
+     DB_HOST=localhost
+     DB_PORT=5432
+     DB_USERNAME=your_username
+     DB_PASSWORD=your_password
+     DB_DATABASE=expense_tracker
+     ```
+
+2. **Install dependencies:**
    ```bash
    cd backend
    npm install
    ```
 
-2. **Start the server:**
+3. **Migrate existing data (optional):**
+   If you have existing JSON data in `backend/data/`, run the migration script:
+   ```bash
+   npm run migrate
+   ```
+
+4. **Start the server:**
    ```bash
    npm run start:dev
    ```
 
-3. **Open your browser:**
+5. **Open your browser:**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Project Structure
@@ -41,18 +60,21 @@ ExpenseLog/
 ├── backend/
 │   ├── src/
 │   │   ├── main.ts              # Application entry point
-│   │   ├── app.module.ts        # Root module
+│   │   ├── app.module.ts        # Root module with TypeORM config
+│   │   ├── migrate-data.ts      # JSON to PostgreSQL migration script
 │   │   ├── categories/          # Categories module
 │   │   │   ├── categories.module.ts
 │   │   │   ├── categories.controller.ts
 │   │   │   ├── categories.service.ts
+│   │   │   ├── category.entity.ts
 │   │   │   └── category.interface.ts
 │   │   └── expenses/            # Expenses module
 │   │       ├── expenses.module.ts
 │   │       ├── expenses.controller.ts
 │   │       ├── expenses.service.ts
+│   │       ├── expense.entity.ts
 │   │       └── expense.interface.ts
-│   ├── data/                    # JSON data storage (auto-created)
+│   ├── data/                    # Legacy JSON data (for migration)
 │   ├── package.json
 │   └── tsconfig.json
 └── frontend/
@@ -80,15 +102,31 @@ ExpenseLog/
 - `GET /api/expenses/patterns` - Get spending patterns
 - `GET /api/expenses/trends` - Get monthly trends
 
-## Data Storage
+## Database Schema
 
-Data is stored in JSON files in the `backend/data/` directory:
-- `categories.json` - Category definitions
-- `expenses.json` - Expense records
+### Categories Table
+| Column    | Type         | Description                    |
+|-----------|--------------|--------------------------------|
+| id        | SERIAL       | Primary key                    |
+| name      | VARCHAR      | Category name                  |
+| color     | VARCHAR      | Hex color code (default: #C9CBCF) |
+| icon      | VARCHAR      | Emoji icon (default: 📁)       |
+| createdAt | TIMESTAMP    | Record creation timestamp      |
+
+### Expenses Table
+| Column      | Type         | Description                    |
+|-------------|--------------|--------------------------------|
+| id          | SERIAL       | Primary key                    |
+| description | VARCHAR      | Expense description (nullable) |
+| amount      | DECIMAL(10,2)| Expense amount                 |
+| categoryId  | INTEGER      | Foreign key to categories      |
+| date        | TIMESTAMP    | Expense date                   |
+| createdAt   | TIMESTAMP    | Record creation timestamp      |
 
 ## Tech Stack
 
-- **Backend:** NestJS, TypeScript, Express
+- **Backend:** NestJS, TypeScript, TypeORM
+- **Database:** PostgreSQL
 - **Frontend:** HTML5, CSS3, JavaScript (ES6+)
 - **Charts:** Chart.js
-- **Storage:** JSON files (can be upgraded to a database)
+- **Date Picker:** Flatpickr
