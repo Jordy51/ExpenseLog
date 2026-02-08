@@ -7,13 +7,22 @@ export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) { }
 
   @Get()
-  findAll(@Query('sortBy') sortBy?: string, @Query('sortOrder') sortOrder?: string) {
-    return this.expensesService.findAll(sortBy, sortOrder);
+  findAll(
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+    @Query('type') type?: string
+  ) {
+    return this.expensesService.findAll(sortBy, sortOrder, type);
   }
 
   @Get('summary')
   getSummary() {
     return this.expensesService.getSummary();
+  }
+
+  @Get('lending-summary')
+  getLendingBorrowingSummary() {
+    return this.expensesService.getLendingBorrowingSummary();
   }
 
   @Get('patterns')

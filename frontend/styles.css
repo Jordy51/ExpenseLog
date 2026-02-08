@@ -1703,3 +1703,192 @@ select:focus-visible {
         grid-template-columns: 1fr;
     }
 }
+
+/* =============================================
+   TRANSACTION TYPE TABS
+   ============================================= */
+
+.transaction-type-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 4px;
+    background: var(--gray-100);
+    border-radius: var(--radius-md);
+}
+
+.type-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.type-tab:hover {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.type-tab.active {
+    background: var(--white);
+    box-shadow: var(--shadow-md);
+}
+
+.type-tab .tab-icon {
+    font-size: 1.3rem;
+}
+
+.type-tab .tab-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gray-500);
+}
+
+.type-tab.active .tab-label {
+    color: var(--gray-800);
+}
+
+/* Type-specific tab colors */
+.type-tab[data-type="expense"].active {
+    border-bottom: 3px solid var(--primary);
+}
+
+.type-tab[data-type="lent"].active {
+    border-bottom: 3px solid #10B981;
+}
+
+.type-tab[data-type="borrowed"].active {
+    border-bottom: 3px solid #F59E0B;
+}
+
+/* Person name field styling */
+.person-name-group {
+    animation: slideDown 0.3s ease;
+}
+
+.person-name-group input {
+    border-color: var(--primary-light);
+    background: linear-gradient(to right, rgba(94, 234, 212, 0.05), transparent);
+}
+
+/* =============================================
+   LENDING/BORROWING SUMMARY CARDS
+   ============================================= */
+
+.summary-cards {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.lent-card .card-icon {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+}
+
+.borrowed-card .card-icon {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+.balance-card .card-icon {
+    background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+}
+
+.card-content .amount.positive {
+    color: #059669;
+}
+
+.card-content .amount.negative {
+    color: #DC2626;
+}
+
+/* =============================================
+   TRANSACTION TYPE BADGES IN LIST
+   ============================================= */
+
+.transaction-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+}
+
+.transaction-type-badge.expense {
+    background: rgba(13, 148, 136, 0.1);
+    color: #0D9488;
+}
+
+.transaction-type-badge.lent {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+}
+
+.transaction-type-badge.borrowed {
+    background: rgba(245, 158, 11, 0.1);
+    color: #D97706;
+}
+
+/* Person name in expense item */
+.expense-person {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.expense-person::before {
+    content: '→ ';
+}
+
+/* Amount colors by transaction type */
+.expense-amount .amount.lent-amount {
+    color: #059669;
+}
+
+.expense-amount .amount.lent-amount::before {
+    content: '+';
+}
+
+.expense-amount .amount.borrowed-amount {
+    color: #D97706;
+}
+
+/* =============================================
+   RESPONSIVE ADJUSTMENTS FOR NEW CARDS
+   ============================================= */
+
+@media (max-width: 1400px) {
+    .summary-cards {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .summary-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .transaction-type-tabs {
+        flex-wrap: wrap;
+    }
+
+    .type-tab {
+        flex: 1 1 calc(33.33% - 8px);
+        min-width: 80px;
+    }
+}

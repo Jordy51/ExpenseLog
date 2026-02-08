@@ -66,16 +66,62 @@
                     <p class="amount" id="totalTransactions">0</p>
                 </div>
             </div>
+            <div class="card summary-card lent-card">
+                <div class="card-icon">💸</div>
+                <div class="card-content">
+                    <h3>Lent (Others Owe You)</h3>
+                    <p class="amount positive" id="totalLent">₹0.00</p>
+                </div>
+            </div>
+            <div class="card summary-card borrowed-card">
+                <div class="card-icon">🤝</div>
+                <div class="card-content">
+                    <h3>Borrowed (You Owe)</h3>
+                    <p class="amount negative" id="totalBorrowed">₹0.00</p>
+                </div>
+            </div>
+            <div class="card summary-card balance-card">
+                <div class="card-icon">⚖️</div>
+                <div class="card-content">
+                    <h3>Net Balance</h3>
+                    <p class="amount" id="netBalance">₹0.00</p>
+                </div>
+            </div>
         </section>
 
         <!-- Main Content - 3 Column Layout -->
         <div class="main-content">
             <!-- Left Panel - Add Expense Form -->
             <div class="left-panel">
-                <!-- Add Expense Form -->
+                <!-- Add Transaction Form -->
                 <section class="card">
-                    <h2>➕ Add Expense</h2>
+                    <h2 id="formTitle">➕ Add Transaction</h2>
+                    
+                    <!-- Transaction Type Tabs -->
+                    <div class="transaction-type-tabs">
+                        <button type="button" class="type-tab active" data-type="expense" onclick="selectTransactionType('expense')">
+                            <span class="tab-icon">💰</span>
+                            <span class="tab-label">Expense</span>
+                        </button>
+                        <button type="button" class="type-tab" data-type="lent" onclick="selectTransactionType('lent')">
+                            <span class="tab-icon">💸</span>
+                            <span class="tab-label">Lent</span>
+                        </button>
+                        <button type="button" class="type-tab" data-type="borrowed" onclick="selectTransactionType('borrowed')">
+                            <span class="tab-icon">🤝</span>
+                            <span class="tab-label">Borrowed</span>
+                        </button>
+                    </div>
+
                     <form id="expenseForm">
+                        <input type="hidden" id="transactionType" value="expense">
+                        
+                        <!-- Person Name (for lent/borrowed) -->
+                        <div class="form-group person-name-group" id="personNameGroup" style="display: none;">
+                            <label for="personName">Person Name</label>
+                            <input type="text" id="personName" placeholder="Who did you lend to / borrow from?">
+                        </div>
+                        
                         <div class="form-group">
                             <label for="description">Description (Optional)</label>
                             <input type="text" id="description" placeholder="What did you spend on?">
@@ -94,7 +140,7 @@
                             <input type="text" id="date" required style="display: none;">
                             <div id="dateCalendar" class="inline-calendar"></div>
                         </div>
-                        <button type="submit" class="btn btn-primary">Add Expense</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Add Expense</button>
                     </form>
                 </section>
 
@@ -297,6 +343,12 @@
                         oninput="filterTransactions()">
                 </div>
                 <div class="filter-controls">
+                    <select id="filterType" class="sort-select" onchange="filterTransactions()">
+                        <option value="">All Types</option>
+                        <option value="expense">💰 Expenses</option>
+                        <option value="lent">💸 Lent</option>
+                        <option value="borrowed">🤝 Borrowed</option>
+                    </select>
                     <select id="filterCategory" class="sort-select" onchange="filterTransactions()">
                         <option value="">All Categories</option>
                     </select>
@@ -313,13 +365,38 @@
         </div>
     </div>
 
-    <!-- Edit Expense Modal -->
+    <!-- Edit Transaction Modal -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
-            <h2>Edit Expense</h2>
+            <h2 id="editFormTitle">Edit Transaction</h2>
+            
+            <!-- Edit Transaction Type Tabs -->
+            <div class="transaction-type-tabs">
+                <button type="button" class="type-tab" data-type="expense" onclick="selectEditTransactionType('expense')">
+                    <span class="tab-icon">💰</span>
+                    <span class="tab-label">Expense</span>
+                </button>
+                <button type="button" class="type-tab" data-type="lent" onclick="selectEditTransactionType('lent')">
+                    <span class="tab-icon">💸</span>
+                    <span class="tab-label">Lent</span>
+                </button>
+                <button type="button" class="type-tab" data-type="borrowed" onclick="selectEditTransactionType('borrowed')">
+                    <span class="tab-icon">🤝</span>
+                    <span class="tab-label">Borrowed</span>
+                </button>
+            </div>
+            
             <form id="editExpenseForm">
                 <input type="hidden" id="editExpenseId">
+                <input type="hidden" id="editTransactionType" value="expense">
+                
+                <!-- Person Name (for lent/borrowed) -->
+                <div class="form-group person-name-group" id="editPersonNameGroup" style="display: none;">
+                    <label for="editPersonName">Person Name</label>
+                    <input type="text" id="editPersonName" placeholder="Who did you lend to / borrow from?">
+                </div>
+                
                 <div class="form-group">
                     <label for="editDescription">Description (Optional)</label>
                     <input type="text" id="editDescription">

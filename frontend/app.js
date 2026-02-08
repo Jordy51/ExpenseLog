@@ -4,6 +4,7 @@ const API_URL = '/api';
 // State
 let categories = [];
 let expenses = [];
+let lendingBorrowingSummary = { totalLent: 0, totalBorrowed: 0, netBalance: 0, lentByPerson: {}, borrowedByPerson: {} };
 let categoryChart = null;
 let trendChart = null;
 let dateCalendar = null;
@@ -26,6 +27,67 @@ function toggleInsightsSection() {
     const content = document.getElementById('insightsSection');
     toggle.classList.toggle('active');
     content.classList.toggle('show');
+}
+
+// Transaction Type Selection (Add Form)
+function selectTransactionType(type) {
+    // Update hidden input
+    document.getElementById('transactionType').value = type;
+
+    // Update tab styling
+    document.querySelectorAll('.left-panel .type-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`.left-panel .type-tab[data-type="${type}"]`)?.classList.add('active');
+
+    // Show/hide person name field
+    const personNameGroup = document.getElementById('personNameGroup');
+    const personNameInput = document.getElementById('personName');
+    const submitBtn = document.getElementById('submitBtn');
+    const descInput = document.getElementById('description');
+
+    if (type === 'lent' || type === 'borrowed') {
+        personNameGroup.style.display = 'block';
+        personNameInput.required = true;
+        descInput.placeholder = type === 'lent' ? 'What did you lend for?' : 'What did you borrow for?';
+    } else {
+        personNameGroup.style.display = 'none';
+        personNameInput.required = false;
+        personNameInput.value = '';
+        descInput.placeholder = 'What did you spend on?';
+    }
+
+    // Update submit button text
+    const buttonTexts = {
+        'expense': 'Add Expense',
+        'lent': 'Record Lending',
+        'borrowed': 'Record Borrowing'
+    };
+    submitBtn.textContent = buttonTexts[type] || 'Add Transaction';
+}
+
+// Transaction Type Selection (Edit Form)
+function selectEditTransactionType(type) {
+    // Update hidden input
+    document.getElementById('editTransactionType').value = type;
+
+    // Update tab styling
+    document.querySelectorAll('#editModal .type-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`#editModal .type-tab[data-type="${type}"]`)?.classList.add('active');
+
+    // Show/hide person name field
+    const personNameGroup = document.getElementById('editPersonNameGroup');
+    const personNameInput = document.getElementById('editPersonName');
+
+    if (type === 'lent' || type === 'borrowed') {
+        personNameGroup.style.display = 'block';
+        personNameInput.required = true;
+    } else {
+        personNameGroup.style.display = 'none';
+        personNameInput.required = false;
+    }
 }
 
 // All Transactions Modal
@@ -69,6 +131,7 @@ function filterTransactions() {
 function renderAllExpenses() {
     const container = document.getElementById('allExpensesList');
     const searchTerm = document.getElementById('searchTransactions').value.toLowerCase();
+    const typeFilter = document.getElementById('filterType')?.value || '';
     const categoryFilter = document.getElementById('filterCategory').value;
     const monthFilter = document.getElementById('filterMonth').value;
 
@@ -76,15 +139,17 @@ function renderAllExpenses() {
         const category = categories.find(c => c.id === expense.categoryId);
         const matchesSearch = !searchTerm ||
             expense.description?.toLowerCase().includes(searchTerm) ||
+            expense.personName?.toLowerCase().includes(searchTerm) ||
             category?.name.toLowerCase().includes(searchTerm);
 
+        const matchesType = !typeFilter || (expense.type || 'expense') === typeFilter;
         const matchesCategory = !categoryFilter || expense.categoryId === categoryFilter;
 
         const expenseMonth = new Date(expense.date);
         const expenseMonthStr = `${expenseMonth.getFullYear()}-${String(expenseMonth.getMonth() + 1).padStart(2, '0')}`;
         const matchesMonth = !monthFilter || expenseMonthStr === monthFilter;
 
-        return matchesSearch && matchesCategory && matchesMonth;
+        return matchesSearch && matchesType && matchesCategory && matchesMonth;
     });
 
     // Update summary
@@ -100,18 +165,30 @@ function renderAllExpenses() {
         const category = categories.find(c => c.id === expense.categoryId) || { icon: '📦', name: 'Unknown', color: '#888' };
         const date = new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const amount = parseFloat(expense.amount) || 0;
+        const type = expense.type || 'expense';
+
+        // Type-specific styling
+        const typeLabels = { 'expense': 'Expense', 'lent': 'Lent', 'borrowed': 'Borrowed' };
+        const amountPrefix = type === 'lent' ? '+' : type === 'borrowed' ? '' : '-';
+        const amountClass = type === 'lent' ? 'lent-amount' : type === 'borrowed' ? 'borrowed-amount' : '';
+
+        // Person name display
+        const personDisplay = expense.personName ? `<div class="expense-person">${expense.personName}</div>` : '';
 
         return `
             <div class="expense-item">
                 <div class="expense-info">
                     <span class="expense-icon">${category.icon}</span>
                     <div class="expense-details">
-                        <h4>${expense.description || 'No description'}</h4>
+                        <h4>${expense.description || 'No description'}
+                            <span class="transaction-type-badge ${type}">${typeLabels[type]}</span>
+                        </h4>
                         <span style="color: ${category.color}">${category.name}</span>
+                        ${personDisplay}
                     </div>
                 </div>
                 <div class="expense-amount">
-                    <div class="amount">-₹${amount.toFixed(2)}</div>
+                    <div class="amount ${amountClass}">${amountPrefix}₹${amount.toFixed(2)}</div>
                     <div class="date">${date}</div>
                 </div>
                 <div class="expense-actions">
@@ -132,6 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadCategories();
     loadExpenses(); // loadInsights is called inside after data is fetched
     loadSummary();
+    loadLendingBorrowingSummary();
     loadPatterns();
     loadTrends();
     setupEventListeners();
@@ -478,8 +556,16 @@ async function addExpense() {
     const amount = parseFloat(document.getElementById('amount').value);
     const categoryId = document.getElementById('category').value;
     const date = document.getElementById('date').value;
+    const type = document.getElementById('transactionType').value || 'expense';
+    const personName = document.getElementById('personName').value;
 
-    const expenseData = { description, amount, categoryId, date };
+    // Validate person name for lent/borrowed
+    if ((type === 'lent' || type === 'borrowed') && !personName.trim()) {
+        showToast('Please enter the person name for lending/borrowing', 'error');
+        return;
+    }
+
+    const expenseData = { description, amount, categoryId, date, type, personName: personName.trim() || null };
 
     if (navigator.onLine) {
         // Online: send to server
@@ -506,17 +592,21 @@ async function addExpense() {
             await offlineDB.saveExpense(tempExpense);
             await syncManager.queueOperation('create', 'expenses', expenseData);
         }
-        showToast('Expense saved offline. Will sync when online.', 'info');
+        showToast('Transaction saved offline. Will sync when online.', 'info');
     }
 
     renderExpenses();
     loadSummary();
+    loadLendingBorrowingSummary();
     loadPatterns();
     loadTrends();
     loadInsights();
     document.getElementById('expenseForm').reset();
     renderCategoryOptions('categoryOptions'); // Reset category selection
     initializeDateInput();
+
+    // Reset to expense type
+    selectTransactionType('expense');
 }
 
 async function deleteExpense(id) {
@@ -538,6 +628,7 @@ async function deleteExpense(id) {
 
     renderExpenses();
     loadSummary();
+    loadLendingBorrowingSummary();
     loadPatterns();
     loadTrends();
     loadInsights();
@@ -551,6 +642,14 @@ function editExpense(id) {
     document.getElementById('editDescription').value = expense.description || '';
     document.getElementById('editAmount').value = expense.amount;
     document.getElementById('editCategory').value = expense.categoryId;
+
+    // Set transaction type
+    const type = expense.type || 'expense';
+    document.getElementById('editTransactionType').value = type;
+    selectEditTransactionType(type);
+
+    // Set person name
+    document.getElementById('editPersonName').value = expense.personName || '';
 
     // Render category options with selection
     renderCategoryOptions('editCategoryOptions', expense.categoryId);
@@ -595,8 +694,16 @@ async function updateExpense() {
     const amount = parseFloat(document.getElementById('editAmount').value);
     const categoryId = document.getElementById('editCategory').value;
     const date = document.getElementById('editDate').value;
+    const type = document.getElementById('editTransactionType').value || 'expense';
+    const personName = document.getElementById('editPersonName').value;
 
-    const expenseData = { description, amount, categoryId, date };
+    // Validate person name for lent/borrowed
+    if ((type === 'lent' || type === 'borrowed') && !personName.trim()) {
+        showToast('Please enter the person name for lending/borrowing', 'error');
+        return;
+    }
+
+    const expenseData = { description, amount, categoryId, date, type, personName: personName.trim() || null };
     let updatedExpense;
 
     if (navigator.onLine) {
@@ -628,6 +735,7 @@ async function updateExpense() {
         if (index !== -1) expenses[index] = updatedExpense;
         renderExpenses();
         loadSummary();
+        loadLendingBorrowingSummary();
         loadPatterns();
         loadTrends();
         loadInsights();
@@ -643,7 +751,7 @@ function renderExpenses() {
     const container = document.getElementById('expensesList');
 
     if (expenses.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>No expenses recorded yet</p></div>';
+        container.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>No transactions recorded yet</p></div>';
         return;
     }
 
@@ -651,18 +759,30 @@ function renderExpenses() {
         const category = categories.find(c => c.id === expense.categoryId) || { icon: '📦', name: 'Unknown', color: '#888' };
         const date = new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const amount = parseFloat(expense.amount) || 0;
+        const type = expense.type || 'expense';
+
+        // Type-specific styling
+        const typeLabels = { 'expense': 'Expense', 'lent': 'Lent', 'borrowed': 'Borrowed' };
+        const amountPrefix = type === 'lent' ? '+' : type === 'borrowed' ? '' : '-';
+        const amountClass = type === 'lent' ? 'lent-amount' : type === 'borrowed' ? 'borrowed-amount' : '';
+
+        // Person name display
+        const personDisplay = expense.personName ? `<div class="expense-person">${expense.personName}</div>` : '';
 
         return `
             <div class="expense-item">
                 <div class="expense-info">
                     <span class="expense-icon">${category.icon}</span>
                     <div class="expense-details">
-                        <h4>${expense.description || 'No description'}</h4>
+                        <h4>${expense.description || 'No description'}
+                            <span class="transaction-type-badge ${type}">${typeLabels[type]}</span>
+                        </h4>
                         <span style="color: ${category.color}">${category.name}</span>
+                        ${personDisplay}
                     </div>
                 </div>
                 <div class="expense-amount">
-                    <div class="amount">-₹${amount.toFixed(2)}</div>
+                    <div class="amount ${amountClass}">${amountPrefix}₹${amount.toFixed(2)}</div>
                     <div class="date">${date}</div>
                 </div>
                 <div class="expense-actions">
@@ -691,6 +811,46 @@ async function loadSummary() {
     } else {
         changeEl.textContent = 'No change';
         changeEl.className = 'change';
+    }
+}
+
+// Lending/Borrowing Summary
+async function loadLendingBorrowingSummary() {
+    const summary = await fetchAPI('/expenses/lending-summary');
+    if (!summary) {
+        // If API fails, calculate from local data
+        const lentTransactions = expenses.filter(e => e.type === 'lent');
+        const borrowedTransactions = expenses.filter(e => e.type === 'borrowed');
+
+        lendingBorrowingSummary = {
+            totalLent: lentTransactions.reduce((sum, e) => sum + parseFloat(e.amount), 0),
+            totalBorrowed: borrowedTransactions.reduce((sum, e) => sum + parseFloat(e.amount), 0),
+            netBalance: 0,
+            lentByPerson: {},
+            borrowedByPerson: {}
+        };
+        lendingBorrowingSummary.netBalance = lendingBorrowingSummary.totalLent - lendingBorrowingSummary.totalBorrowed;
+    } else {
+        lendingBorrowingSummary = summary;
+    }
+
+    // Update UI
+    const totalLentEl = document.getElementById('totalLent');
+    const totalBorrowedEl = document.getElementById('totalBorrowed');
+    const netBalanceEl = document.getElementById('netBalance');
+
+    if (totalLentEl) {
+        totalLentEl.textContent = `₹${lendingBorrowingSummary.totalLent.toFixed(2)}`;
+    }
+
+    if (totalBorrowedEl) {
+        totalBorrowedEl.textContent = `₹${lendingBorrowingSummary.totalBorrowed.toFixed(2)}`;
+    }
+
+    if (netBalanceEl) {
+        const balance = lendingBorrowingSummary.netBalance;
+        netBalanceEl.textContent = `${balance >= 0 ? '+' : ''}₹${balance.toFixed(2)}`;
+        netBalanceEl.className = `amount ${balance >= 0 ? 'positive' : 'negative'}`;
     }
 }
 
@@ -887,13 +1047,14 @@ function calculateAverages() {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // Get this month's expenses
+    // Get this month's expenses (only regular expenses, not lent/borrowed)
     const thisMonthExpenses = expenses.filter(e => {
         const d = new Date(e.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        const type = e.type || 'expense';
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear && type === 'expense';
     });
 
-    const totalThisMonth = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const totalThisMonth = thisMonthExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     const dayOfMonth = now.getDate();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
@@ -911,7 +1072,10 @@ function calculateAverages() {
 }
 
 function calculatePeakDay() {
-    if (expenses.length === 0) {
+    // Only consider regular expenses
+    const regularExpenses = expenses.filter(e => (e.type || 'expense') === 'expense');
+
+    if (regularExpenses.length === 0) {
         document.getElementById('peakDay').textContent = '-';
         return;
     }
@@ -919,9 +1083,9 @@ function calculatePeakDay() {
     const dayTotals = {};
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    expenses.forEach(e => {
+    regularExpenses.forEach(e => {
         const day = new Date(e.date).getDay();
-        dayTotals[day] = (dayTotals[day] || 0) + e.amount;
+        dayTotals[day] = (dayTotals[day] || 0) + (parseFloat(e.amount) || 0);
     });
 
     let maxDay = 0;
@@ -946,19 +1110,20 @@ function generateAlerts() {
     const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-    // Get spending by category for this month and last month
+    // Get spending by category for this month and last month (only regular expenses)
     const thisMonthByCategory = {};
     const lastMonthByCategory = {};
 
-    expenses.forEach(e => {
+    expenses.filter(e => (e.type || 'expense') === 'expense').forEach(e => {
         const d = new Date(e.date);
         const month = d.getMonth();
         const year = d.getFullYear();
+        const amount = parseFloat(e.amount) || 0;
 
         if (month === currentMonth && year === currentYear) {
-            thisMonthByCategory[e.categoryId] = (thisMonthByCategory[e.categoryId] || 0) + e.amount;
+            thisMonthByCategory[e.categoryId] = (thisMonthByCategory[e.categoryId] || 0) + amount;
         } else if (month === lastMonth && year === lastMonthYear) {
-            lastMonthByCategory[e.categoryId] = (lastMonthByCategory[e.categoryId] || 0) + e.amount;
+            lastMonthByCategory[e.categoryId] = (lastMonthByCategory[e.categoryId] || 0) + amount;
         }
     });
 
@@ -1025,12 +1190,12 @@ function renderBudgetTracking() {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // Get this month's spending by category
+    // Get this month's spending by category (only regular expenses)
     const spending = {};
-    expenses.forEach(e => {
+    expenses.filter(e => (e.type || 'expense') === 'expense').forEach(e => {
         const d = new Date(e.date);
         if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-            spending[e.categoryId] = (spending[e.categoryId] || 0) + e.amount;
+            spending[e.categoryId] = (spending[e.categoryId] || 0) + (parseFloat(e.amount) || 0);
         }
     });
 
@@ -1083,12 +1248,14 @@ function renderTopExpenses() {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // Get this month's expenses sorted by amount
+    // Get this month's expenses sorted by amount (only regular expenses)
     const thisMonthExpenses = expenses
         .filter(e => {
             const d = new Date(e.date);
-            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            const type = e.type || 'expense';
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear && type === 'expense';
         })
+        .map(e => ({ ...e, amount: parseFloat(e.amount) || 0 }))
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 5);
 
@@ -1124,19 +1291,20 @@ function renderCategoryComparison() {
     const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-    // Get spending by category
+    // Get spending by category (only regular expenses)
     const thisMonthByCategory = {};
     const lastMonthByCategory = {};
 
-    expenses.forEach(e => {
+    expenses.filter(e => (e.type || 'expense') === 'expense').forEach(e => {
         const d = new Date(e.date);
         const month = d.getMonth();
         const year = d.getFullYear();
+        const amount = parseFloat(e.amount) || 0;
 
         if (month === currentMonth && year === currentYear) {
-            thisMonthByCategory[e.categoryId] = (thisMonthByCategory[e.categoryId] || 0) + e.amount;
+            thisMonthByCategory[e.categoryId] = (thisMonthByCategory[e.categoryId] || 0) + amount;
         } else if (month === lastMonth && year === lastMonthYear) {
-            lastMonthByCategory[e.categoryId] = (lastMonthByCategory[e.categoryId] || 0) + e.amount;
+            lastMonthByCategory[e.categoryId] = (lastMonthByCategory[e.categoryId] || 0) + amount;
         }
     });
 
@@ -1189,7 +1357,10 @@ function renderCategoryComparison() {
 }
 
 function calculateStreaks() {
-    if (expenses.length === 0) {
+    // Only consider regular expenses for streaks
+    const regularExpenses = expenses.filter(e => (e.type || 'expense') === 'expense');
+
+    if (regularExpenses.length === 0) {
         document.getElementById('noSpendStreak').textContent = '0 days';
         document.getElementById('spendingStreak').textContent = '0 days';
         return;
@@ -1197,7 +1368,7 @@ function calculateStreaks() {
 
     // Get unique dates with expenses
     const expenseDates = new Set(
-        expenses.map(e => new Date(e.date).toDateString())
+        regularExpenses.map(e => new Date(e.date).toDateString())
     );
 
     const today = new Date();

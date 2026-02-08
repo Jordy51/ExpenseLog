@@ -2,7 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { ExpenseEntity } from './expense.entity';
-import { CreateExpenseDto, ExpensePattern, MonthlyTrend } from './expense.interface';
+import { CreateExpenseDto, ExpensePattern, MonthlyTrend, LendingBorrowingSummary } from './expense.interface';
 import { CategoriesService } from '../categories/categories.service';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class ExpensesService {
     private readonly categoriesService: CategoriesService,
   ) { }
 
-  async findAll(sortBy?: string, sortOrder?: string): Promise<ExpenseEntity[]> {
+  async findAll(sortBy?: string, sortOrder?: string, type?: string): Promise<ExpenseEntity[]> {
     const order: any = {};
     const orderDirection = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
@@ -30,7 +30,12 @@ export class ExpensesService {
         break;
     }
 
-    return this.expenseRepository.find({ order });
+    const where: any = {};
+    if (type && ['expense', 'lent', 'borrowed'].includes(type)) {
+      where.type = type;
+    }
+
+    return this.expenseRepository.find({ where, order });
   }
 
   async findOne(id: string): Promise<ExpenseEntity | null> {
@@ -42,11 +47,24 @@ export class ExpensesService {
     if (isNaN(categoryId)) {
       throw new BadRequestException('Invalid categoryId: must be a valid number');
     }
+
+    const type = dto.type || 'expense';
+    if (!['expense', 'lent', 'borrowed'].includes(type)) {
+      throw new BadRequestException('Invalid type: must be expense, lent, or borrowed');
+    }
+
+    // Require personName for lent and borrowed transactions
+    if ((type === 'lent' || type === 'borrowed') && !dto.personName?.trim()) {
+      throw new BadRequestException('Person name is required for lending/borrowing transactions');
+    }
+
     const expense = this.expenseRepository.create({
       description: dto.description,
       amount: dto.amount,
       categoryId,
       date: dto.date ? new Date(dto.date) : new Date(),
+      type,
+      personName: dto.personName?.trim() || null,
     });
     return this.expenseRepository.save(expense);
   }
@@ -65,6 +83,13 @@ export class ExpensesService {
       expense.categoryId = categoryId;
     }
     if (dto.date !== undefined) expense.date = new Date(dto.date);
+    if (dto.type !== undefined) {
+      if (!['expense', 'lent', 'borrowed'].includes(dto.type)) {
+        throw new BadRequestException('Invalid type: must be expense, lent, or borrowed');
+      }
+      expense.type = dto.type;
+    }
+    if (dto.personName !== undefined) expense.personName = dto.personName?.trim() || null;
 
     return this.expenseRepository.save(expense);
   }
@@ -76,7 +101,8 @@ export class ExpensesService {
 
   async getPatterns(): Promise<ExpensePattern[]> {
     const categories = await this.categoriesService.findAll();
-    const expenses = await this.expenseRepository.find();
+    // Only include expenses (not lent/borrowed) in patterns
+    const expenses = await this.expenseRepository.find({ where: { type: 'expense' } });
     const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
     const patterns: ExpensePattern[] = categories.map(category => {
@@ -98,7 +124,8 @@ export class ExpensesService {
   }
 
   async getMonthlyTrends(months: number = 6): Promise<MonthlyTrend[]> {
-    const expenses = await this.expenseRepository.find();
+    // Only include expenses (not lent/borrowed) in trends
+    const expenses = await this.expenseRepository.find({ where: { type: 'expense' } });
     const trends: MonthlyTrend[] = [];
     const now = new Date();
 
@@ -129,7 +156,8 @@ export class ExpensesService {
   }
 
   async getSummary() {
-    const expenses = await this.expenseRepository.find();
+    const allTransactions = await this.expenseRepository.find();
+    const expenses = allTransactions.filter(e => e.type === 'expense' || !e.type);
     const now = new Date();
 
     const thisMonth = expenses.filter(e => {
@@ -152,6 +180,37 @@ export class ExpensesService {
       lastMonth: lastMonthTotal,
       monthlyChange: lastMonthTotal > 0 ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 : 0,
       totalTransactions: expenses.length,
+    };
+  }
+
+  async getLendingBorrowingSummary(): Promise<LendingBorrowingSummary> {
+    const allTransactions = await this.expenseRepository.find();
+    
+    const lentTransactions = allTransactions.filter(e => e.type === 'lent');
+    const borrowedTransactions = allTransactions.filter(e => e.type === 'borrowed');
+
+    const totalLent = lentTransactions.reduce((sum, e) => sum + Number(e.amount), 0);
+    const totalBorrowed = borrowedTransactions.reduce((sum, e) => sum + Number(e.amount), 0);
+
+    // Group by person
+    const lentByPerson: { [personName: string]: number } = {};
+    lentTransactions.forEach(e => {
+      const person = e.personName || 'Unknown';
+      lentByPerson[person] = (lentByPerson[person] || 0) + Number(e.amount);
+    });
+
+    const borrowedByPerson: { [personName: string]: number } = {};
+    borrowedTransactions.forEach(e => {
+      const person = e.personName || 'Unknown';
+      borrowedByPerson[person] = (borrowedByPerson[person] || 0) + Number(e.amount);
+    });
+
+    return {
+      totalLent,
+      totalBorrowed,
+      netBalance: totalLent - totalBorrowed,
+      lentByPerson,
+      borrowedByPerson,
     };
   }
 }
