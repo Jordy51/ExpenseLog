@@ -340,7 +340,7 @@ function setupEventListeners() {
     document.getElementById('sortOrder').addEventListener('change', loadExpenses);
 
     // Modal close
-    document.querySelector('.close').addEventListener('click', closeModal);
+    document.querySelector('#editModal .close').addEventListener('click', closeModal);
     window.addEventListener('click', (e) => {
         if (e.target === document.getElementById('editModal')) {
             closeModal();
@@ -623,7 +623,7 @@ async function deleteExpense(id) {
     }
 
     // Remove locally
-    expenses = expenses.filter(e => e.id !== id);
+    expenses = expenses.filter(e => e.id != id);
     if (dbReady) await offlineDB.deleteExpense(id);
 
     renderExpenses();
@@ -635,7 +635,7 @@ async function deleteExpense(id) {
 }
 
 function editExpense(id) {
-    const expense = expenses.find(e => e.id === id);
+    const expense = expenses.find(e => e.id == id);
     if (!expense) return;
 
     document.getElementById('editExpenseId').value = expense.id;
@@ -731,7 +731,7 @@ async function updateExpense() {
     }
 
     if (updatedExpense) {
-        const index = expenses.findIndex(e => e.id === id);
+        const index = expenses.findIndex(e => e.id == id);
         if (index !== -1) expenses[index] = updatedExpense;
         renderExpenses();
         loadSummary();
